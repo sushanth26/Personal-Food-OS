@@ -1,0 +1,485 @@
+:root {
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: #102116;
+  background:
+    radial-gradient(circle at top, rgba(242, 193, 95, 0.35), transparent 28%),
+    linear-gradient(180deg, #f6f0e5 0%, #edf4ea 100%);
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 16px 14px 28px;
+}
+
+.hero,
+.dashboard {
+  display: grid;
+  gap: 14px;
+}
+
+.tabs {
+  position: sticky;
+  top: 10px;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(16, 33, 22, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.tab-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5b6d60;
+  font-weight: 600;
+}
+
+.tab-button.active {
+  background: #1f3a2c;
+  color: #f8f4ec;
+  box-shadow: 0 10px 20px rgba(31, 58, 44, 0.18);
+}
+
+.hero {
+  margin-bottom: 14px;
+}
+
+.hero-copy-block,
+.hero-stat,
+.panel {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(16, 33, 22, 0.08);
+  border-radius: 22px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 42px rgba(44, 63, 48, 0.08);
+}
+
+.hero-copy-block,
+.hero-stat,
+.panel {
+  padding: 18px;
+}
+
+.eyebrow,
+.section-kicker,
+.meal-type,
+.reminder-tag,
+.subheading {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  margin: 0 0 8px;
+  color: #536758;
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 11vw, 3.4rem);
+  line-height: 0.94;
+  margin: 0 0 12px;
+  max-width: 10ch;
+}
+
+.helper-copy,
+.planner-note,
+.meal-header p,
+.reminder-card p,
+.hero-stat p {
+  margin: 0;
+  color: #516555;
+}
+
+.hero-stat span,
+.metric-card span,
+.portion-box span,
+.macro-preview span,
+.calculator-card span,
+.hero-value-item span {
+  color: #5f725f;
+  font-size: 0.88rem;
+}
+
+.hero-value-list {
+  display: grid;
+  gap: 10px;
+}
+
+.hero-value-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f4efe4;
+}
+
+.hero-value-item strong {
+  font-size: 0.98rem;
+}
+
+.hero-stat strong,
+.calculator-card strong {
+  display: block;
+  font-size: 1.9rem;
+  margin: 6px 0;
+}
+
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.panel-heading h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.hidden-panel {
+  display: none;
+}
+
+.active-panel {
+  display: block;
+}
+
+.profile-form,
+.profile-summary,
+.meal-list,
+.reminder-list {
+  display: grid;
+  gap: 14px;
+}
+
+.section-block {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #f4efe4;
+}
+
+.profile-form label,
+.split-fields label,
+.macro-grid label {
+  display: grid;
+  gap: 8px;
+  color: #2e4437;
+}
+
+input,
+select {
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 33, 22, 0.12);
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.macro-grid,
+.split-fields,
+.totals-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #31463a;
+}
+
+.checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.check-pill input {
+  min-height: auto;
+  margin: 0;
+}
+
+.primary-button,
+.ghost-button {
+  min-height: 48px;
+  border-radius: 999px;
+  border: 0;
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.primary-button {
+  background: #1f3a2c;
+  color: #f8f4ec;
+  box-shadow: 0 12px 24px rgba(31, 58, 44, 0.24);
+}
+
+.ghost-button {
+  background: rgba(31, 58, 44, 0.09);
+  color: #1f3a2c;
+}
+
+.macro-preview,
+.portion-box,
+.metric-card,
+.date-chip,
+.stat-row,
+.calculator-card,
+.empty-state {
+  border-radius: 18px;
+  background: #f3efe3;
+}
+
+.macro-preview,
+.portion-box,
+.metric-card,
+.stat-row,
+.calculator-card,
+.empty-state {
+  padding: 14px 16px;
+}
+
+.portion-copy {
+  margin: 8px 0 0;
+  color: #425748;
+  font-size: 0.94rem;
+}
+
+.video-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.video-link {
+  display: grid;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.video-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 14px;
+  background: #dfe7df;
+}
+
+.video-copy strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.video-copy p {
+  margin: 0;
+  color: #506556;
+}
+
+.calculator-card {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-summary {
+  gap: 12px;
+}
+
+.stat-row,
+.ingredient-list li,
+.grocery-list li,
+.calculator-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.date-chip {
+  padding: 10px 14px;
+  font-size: 0.9rem;
+}
+
+.meal-card,
+.reminder-card {
+  border-radius: 20px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(240, 239, 230, 0.95));
+  border: 1px solid rgba(16, 33, 22, 0.08);
+}
+
+.meal-summary {
+  display: grid;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.meal-summary::-webkit-details-marker {
+  display: none;
+}
+
+.meal-summary h3,
+.reminder-card h3 {
+  margin: 0 0 8px;
+}
+
+.meal-summary-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.meal-details {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.macro-badge {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(31, 58, 44, 0.08);
+}
+
+.macro-badge strong {
+  display: block;
+  margin-top: 6px;
+}
+
+.ingredient-list,
+.grocery-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ingredient-list li,
+.grocery-list li {
+  padding-top: 10px;
+  border-top: 1px solid rgba(16, 33, 22, 0.08);
+}
+
+.meal-breakfast {
+  background: linear-gradient(180deg, rgba(255, 246, 214, 0.94), rgba(255, 252, 240, 0.98));
+}
+
+.meal-lunch {
+  background: linear-gradient(180deg, rgba(228, 243, 222, 0.94), rgba(244, 250, 241, 0.98));
+}
+
+.meal-dinner {
+  background: linear-gradient(180deg, rgba(233, 236, 249, 0.94), rgba(246, 247, 252, 0.98));
+}
+
+.meal-snack {
+  background: linear-gradient(180deg, rgba(248, 229, 218, 0.94), rgba(253, 244, 239, 0.98));
+}
+
+.reminder-card.soak {
+  background: linear-gradient(180deg, rgba(242, 229, 200, 0.95), rgba(255, 247, 227, 0.95));
+}
+
+.reminder-card.prep {
+  background: linear-gradient(180deg, rgba(226, 241, 232, 0.95), rgba(243, 249, 239, 0.95));
+}
+
+.error-state {
+  background: #fbe8e3;
+  color: #8a4230;
+}
+
+@media (min-width: 700px) {
+  .app-shell {
+    padding: 24px;
+  }
+
+  .macro-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .split-fields,
+  .totals-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 980px) {
+  .hero {
+    grid-template-columns: 1.6fr 0.9fr;
+  }
+
+  .dashboard {
+    grid-template-columns: 1.02fr 1.18fr;
+    align-items: start;
+  }
+
+  .tabs {
+    grid-column: 1 / -1;
+  }
+
+  .panel-plan {
+    grid-row: span 2;
+  }
+
+  .hidden-panel,
+  .active-panel {
+    display: block;
+  }
+
+  .macro-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .meal-header {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  .meal-summary {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+}
