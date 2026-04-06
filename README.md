@@ -29,6 +29,8 @@ npm run dev
 
 The local dev UI runs on `http://127.0.0.1:5173/` and calls the Express API on `http://127.0.0.1:8787`.
 
+In local development, the Vite dev server proxies `/api` requests to the Express server. In production, the frontend uses the same origin as the deployed app.
+
 ## Railway deploy
 
 Set this Railway environment variable:
