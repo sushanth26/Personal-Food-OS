@@ -47,6 +47,8 @@ npm run start
 
 The production server serves both the built frontend and the API from the same port.
 
+If this GitHub repo is connected to Railway with auto-deploy enabled for `main`, merging a PR into `main` will trigger a fresh deploy automatically.
+
 ## Test
 
 ```bash

@@ -23,6 +23,10 @@ app.options("*", (_, res) => {
 });
 app.use(express.json({ limit: "1mb" }));
 
+app.get("/api/health", (_, res) => {
+  res.json({ ok: true });
+});
+
 const aiMealPlanSchema = z.object({
   date: z.string(),
   meals: z.array(
