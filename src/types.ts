@@ -33,6 +33,7 @@ export interface NutritionProfile {
   exclusions: Exclusion[];
   mealsPerDay: 3 | 4;
   prepPreference: PrepPreference;
+  allowRepeats: boolean;
 }
 
 export interface IngredientDefinition {
@@ -119,6 +120,14 @@ export interface DailyMealPlan {
   meals: PlannedMeal[];
   totals: MacroTargets & { calories: number };
   reminders: Reminder[];
+  groceryList: GroceryListItem[];
+  note?: string;
+}
+
+export interface WeeklyMealPlan {
+  startDate: string;
+  days: DailyMealPlan[];
+  totals: MacroTargets & { calories: number };
   groceryList: GroceryListItem[];
   note?: string;
 }

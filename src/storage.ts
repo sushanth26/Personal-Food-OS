@@ -1,7 +1,8 @@
-import { DailyMealPlan, NutritionProfile } from "./types";
+import { DailyMealPlan, NutritionProfile, WeeklyMealPlan } from "./types";
 
 const PROFILE_KEY = "personal-food-os.profile";
 const PLAN_KEY = "personal-food-os.plan";
+const WEEK_PLAN_KEY = "personal-food-os.week-plan";
 
 function safeParse<T>(raw: string | null): T | null {
   if (!raw) {
@@ -29,4 +30,12 @@ export function loadPlan(): DailyMealPlan | null {
 
 export function savePlan(plan: DailyMealPlan): void {
   window.localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
+}
+
+export function loadWeekPlan(): WeeklyMealPlan | null {
+  return safeParse<WeeklyMealPlan>(window.localStorage.getItem(WEEK_PLAN_KEY));
+}
+
+export function saveWeekPlan(plan: WeeklyMealPlan): void {
+  window.localStorage.setItem(WEEK_PLAN_KEY, JSON.stringify(plan));
 }
