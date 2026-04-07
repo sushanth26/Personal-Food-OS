@@ -43,7 +43,7 @@ select {
   top: 10px;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   padding: 8px;
   border-radius: 18px;
@@ -59,6 +59,7 @@ select {
   background: transparent;
   color: #5b6d60;
   font-weight: 600;
+  font-size: 0.84rem;
 }
 
 .tab-button.active {
@@ -232,6 +233,11 @@ select {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.repeat-toggle {
+  justify-content: flex-start;
+  width: 100%;
+}
+
 .check-pill input {
   min-height: auto;
   margin: 0;
@@ -326,6 +332,11 @@ select {
   gap: 12px;
 }
 
+.action-stack {
+  display: grid;
+  gap: 12px;
+}
+
 .stat-row,
 .ingredient-list li,
 .grocery-list li,
@@ -342,7 +353,8 @@ select {
 }
 
 .meal-card,
-.reminder-card {
+.reminder-card,
+.week-day-card {
   border-radius: 20px;
   padding: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(240, 239, 230, 0.95));
@@ -356,7 +368,20 @@ select {
   list-style: none;
 }
 
+.week-day-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  cursor: pointer;
+  list-style: none;
+}
+
 .meal-summary::-webkit-details-marker {
+  display: none;
+}
+
+.week-day-summary::-webkit-details-marker {
   display: none;
 }
 
@@ -374,6 +399,50 @@ select {
   display: grid;
   gap: 14px;
   margin-top: 14px;
+}
+
+.week-list,
+.week-meal-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.week-day-meta {
+  text-align: right;
+  display: grid;
+  gap: 4px;
+  color: #44584a;
+}
+
+.week-day-meta strong {
+  font-size: 1rem;
+}
+
+.week-day-actions {
+  margin-top: 14px;
+}
+
+.mini-meal-card {
+  border-radius: 18px;
+  padding: 14px;
+  border: 1px solid rgba(16, 33, 22, 0.08);
+}
+
+.mini-meal-card h4 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.mini-video-card {
+  margin-top: 12px;
+}
+
+.weekly-grocery-block {
+  margin-top: 14px;
+}
+
+.weekly-grocery-list {
+  margin-top: 0;
 }
 
 .macro-badge {
@@ -443,6 +512,10 @@ select {
   .split-fields,
   .totals-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .week-meal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

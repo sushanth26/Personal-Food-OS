@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { deriveMacroTargets, estimateDailyCalories } from "./planner";
-import { loadPlan, loadProfile, savePlan, saveProfile } from "./storage";
+import {
+  loadPlan,
+  loadProfile,
+  loadWeekPlan,
+  savePlan,
+  saveProfile,
+  saveWeekPlan
+} from "./storage";
 import {
   ActivityLevel,
   BiologicalSex,
@@ -12,15 +19,20 @@ import {
   MacroMode,
   MacroPreset,
   NutritionProfile,
-  PrepPreference
+  PrepPreference,
+  WeeklyMealPlan
 } from "./types";
-import type { RecipeVideo } from "./types";
+import type { GroceryListItem, RecipeVideo } from "./types";
 
 const exclusionOptions: Exclusion[] = ["dairy", "eggs", "nuts", "gluten"];
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.DEV ? "http://127.0.0.1:8787" : "")
+).replace(/\/$/, "");
 const tabs = [
   { id: "profile", label: "Profile" },
-  { id: "plan", label: "Plan" },
+  { id: "day", label: "Day" },
+  { id: "week", label: "Week" },
   { id: "reminders", label: "Reminders" },
   { id: "groceries", label: "Groceries" }
 ] as const;
@@ -66,6 +78,63 @@ function getMealPortionSummary(
   return { totalQuantity, mainIngredients };
 }
 
+function formatContext(context: string) {
+  return context.replaceAll("_", " ");
+}
+
+function formatDisplayDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric"
+  }).format(new Date(`${value}T12:00:00Z`));
+}
+
+function getWeekStartDate() {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  today.setDate(today.getDate() + diff);
+  return today.toISOString().slice(0, 10);
+}
+
+function aggregateWeeklyGroceryList(days: DailyMealPlan[]): GroceryListItem[] {
+  const ingredientMap = new Map<string, GroceryListItem>();
+
+  for (const day of days) {
+    for (const item of day.groceryList) {
+      const existing = ingredientMap.get(item.ingredientId);
+      if (existing) {
+        existing.totalQuantity = Math.round((existing.totalQuantity + item.totalQuantity) * 10) / 10;
+      } else {
+        ingredientMap.set(item.ingredientId, { ...item });
+      }
+    }
+  }
+
+  return [...ingredientMap.values()].sort((a, b) => a.ingredientName.localeCompare(b.ingredientName));
+}
+
+function buildWeeklyPlanFromDays(startDate: string, days: DailyMealPlan[]): WeeklyMealPlan {
+  const totals = days.reduce(
+    (accumulator, day) => ({
+      calories: Math.round((accumulator.calories + day.totals.calories) * 10) / 10,
+      protein: Math.round((accumulator.protein + day.totals.protein) * 10) / 10,
+      carbs: Math.round((accumulator.carbs + day.totals.carbs) * 10) / 10,
+      fat: Math.round((accumulator.fat + day.totals.fat) * 10) / 10
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+
+  return {
+    startDate,
+    days,
+    totals,
+    groceryList: aggregateWeeklyGroceryList(days),
+    note: "AI-generated weekly plan with day-by-day meals and one combined grocery list."
+  };
+}
+
 const defaultProfile: NutritionProfile = {
   calorieTarget: 2100,
   sex: "male",
@@ -81,21 +150,21 @@ const defaultProfile: NutritionProfile = {
   dietaryPattern: "omnivore",
   exclusions: [],
   mealsPerDay: 3,
-  prepPreference: "low"
+  prepPreference: "low",
+  allowRepeats: true
 };
-
-function formatContext(context: string) {
-  return context.replaceAll("_", " ");
-}
 
 function App() {
   const [profile, setProfile] = useState<NutritionProfile>(defaultProfile);
   const [saved, setSaved] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [weekError, setWeekError] = useState<string | null>(null);
   const [plan, setPlan] = useState<DailyMealPlan | null>(() => loadPlan());
+  const [weekPlan, setWeekPlan] = useState<WeeklyMealPlan | null>(() => loadWeekPlan());
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingWeek, setIsGeneratingWeek] = useState(false);
   const [mealVideos, setMealVideos] = useState<Record<string, RecipeVideo | null>>({});
 
   useEffect(() => {
@@ -127,21 +196,25 @@ function App() {
       : profile.macroTargets;
 
   useEffect(() => {
-    if (!plan) {
+    const mealsToLoad = [
+      ...(plan?.meals ?? []),
+      ...(weekPlan?.days.flatMap((day) => day.meals) ?? [])
+    ];
+
+    if (!mealsToLoad.length) {
       setMealVideos({});
       return;
     }
 
+    const uniqueMeals = mealsToLoad.filter(
+      (meal, index, collection) => collection.findIndex((entry) => entry.id === meal.id) === index
+    );
+
     let cancelled = false;
 
     async function loadVideos() {
-      const currentPlan = plan;
-      if (!currentPlan) {
-        return;
-      }
-
       const entries = await Promise.all(
-        currentPlan.meals.map(async (meal) => {
+        uniqueMeals.map(async (meal) => {
           try {
             const response = await fetch(
               `${API_BASE_URL}/api/recipe-video?q=${encodeURIComponent(`${meal.name} ${profile.cuisinePreference}`)}`
@@ -165,7 +238,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [plan, profile.cuisinePreference]);
+  }, [plan, weekPlan, profile.cuisinePreference]);
 
   function syncCalculatedCalories() {
     setProfile((current) => ({
@@ -188,7 +261,7 @@ function App() {
   async function requestMealPlan(nextProfile: NutritionProfile) {
     setIsGenerating(true);
     setPlanError(null);
-    setActiveTab("plan");
+    setActiveTab("day");
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/meal-plan`, {
@@ -220,6 +293,41 @@ function App() {
     }
   }
 
+  async function requestWeekPlan(nextProfile: NutritionProfile) {
+    setIsGeneratingWeek(true);
+    setWeekError(null);
+    setActiveTab("week");
+
+    try {
+      const startDate = getWeekStartDate();
+      const response = await fetch(`${API_BASE_URL}/api/weekly-meal-plan`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          profile: nextProfile,
+          startDate
+        })
+      });
+
+      const raw = await response.text();
+      const payload = raw ? (JSON.parse(raw) as { weekPlan?: WeeklyMealPlan; error?: string }) : {};
+      if (!response.ok || !payload.weekPlan) {
+        throw new Error(payload.error ?? "Unable to generate a weekly AI plan right now.");
+      }
+
+      setWeekPlan(payload.weekPlan);
+      saveWeekPlan(payload.weekPlan);
+      setWeekError(null);
+    } catch (error) {
+      setWeekPlan(null);
+      setWeekError(error instanceof Error ? error.message : "Unable to generate a weekly AI plan right now.");
+    } finally {
+      setIsGeneratingWeek(false);
+    }
+  }
+
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextProfile = updateDerivedTargets(profile);
@@ -233,6 +341,48 @@ function App() {
 
   async function regeneratePlan() {
     await requestMealPlan(updateDerivedTargets(profile));
+  }
+
+  async function regenerateWeekPlan() {
+    await requestWeekPlan(updateDerivedTargets(profile));
+  }
+
+  async function regenerateWeekDay(date: string) {
+    if (!weekPlan) {
+      return;
+    }
+
+    setIsGeneratingWeek(true);
+    setWeekError(null);
+    setActiveTab("week");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/meal-plan`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          profile: updateDerivedTargets(profile),
+          date
+        })
+      });
+
+      const raw = await response.text();
+      const payload = raw ? (JSON.parse(raw) as { plan?: DailyMealPlan; error?: string }) : {};
+      if (!response.ok || !payload.plan) {
+        throw new Error(payload.error ?? "Unable to refresh this day right now.");
+      }
+
+      const updatedDays = weekPlan.days.map((day) => (day.date === date ? payload.plan! : day));
+      const nextWeekPlan = buildWeeklyPlanFromDays(weekPlan.startDate, updatedDays);
+      setWeekPlan(nextWeekPlan);
+      saveWeekPlan(nextWeekPlan);
+    } catch (error) {
+      setWeekError(error instanceof Error ? error.message : "Unable to refresh this day right now.");
+    } finally {
+      setIsGeneratingWeek(false);
+    }
   }
 
   return (
@@ -580,6 +730,23 @@ function App() {
                     </select>
                   </label>
                 </div>
+
+                <label className="check-pill repeat-toggle">
+                  <input
+                    type="checkbox"
+                    checked={profile.allowRepeats}
+                    onChange={(event) =>
+                      setProfile((current) => ({
+                        ...current,
+                        allowRepeats: event.target.checked
+                      }))
+                    }
+                  />
+                  Repeat meals / leftovers are okay
+                </label>
+                <p className="helper-copy">
+                  Turn this on if you batch-cook and are happy to repeat a dinner the next day or reuse breakfast items.
+                </p>
               </div>
 
               <div className="macro-preview">
@@ -638,17 +805,26 @@ function App() {
                 <strong>{profile.prepPreference}</strong>
               </div>
               <div className="stat-row">
+                <span>Repeats</span>
+                <strong>{profile.allowRepeats ? "allowed" : "prefer variety"}</strong>
+              </div>
+              <div className="stat-row">
                 <span>Exclusions</span>
                 <strong>{profile.exclusions.length ? profile.exclusions.join(", ") : "none"}</strong>
               </div>
-              <button className="primary-button" onClick={regeneratePlan} disabled={isGenerating}>
-                {isGenerating ? "Generating AI plan..." : "Regenerate day plan"}
-              </button>
+              <div className="action-stack">
+                <button className="primary-button" onClick={regeneratePlan} disabled={isGenerating}>
+                  {isGenerating ? "Generating AI plan..." : "Regenerate day plan"}
+                </button>
+                <button className="ghost-button" onClick={regenerateWeekPlan} disabled={isGeneratingWeek}>
+                  {isGeneratingWeek ? "Generating weekly plan..." : "Build 7-day plan"}
+                </button>
+              </div>
             </div>
           )}
         </section>
 
-        <section className={activeTab === "plan" ? "panel panel-plan active-panel" : "panel panel-plan hidden-panel"}>
+        <section className={activeTab === "day" ? "panel panel-plan active-panel" : "panel panel-plan hidden-panel"}>
           <div className="panel-heading">
             <div>
               <p className="section-kicker">1-day plan</p>
@@ -769,6 +945,126 @@ function App() {
           ) : null}
         </section>
 
+        <section className={activeTab === "week" ? "panel panel-week active-panel" : "panel panel-week hidden-panel"}>
+          <div className="panel-heading">
+            <div>
+              <p className="section-kicker">7-day plan</p>
+              <h2>Your weekly structure</h2>
+            </div>
+            <button className="ghost-button" onClick={regenerateWeekPlan} disabled={isGeneratingWeek}>
+              {isGeneratingWeek ? "Building week..." : "Regenerate week"}
+            </button>
+          </div>
+
+          {weekError ? <div className="empty-state error-state">{weekError}</div> : null}
+
+          {isGeneratingWeek ? (
+            <div className="empty-state">
+              Building your 7-day plan. Weekly plans take longer because the app generates each day with variety in mind.
+            </div>
+          ) : null}
+
+          {!weekPlan && !weekError && !isGeneratingWeek ? (
+            <div className="empty-state">
+              Build a weekly plan to see 7 days of meals, one combined grocery list, and lighter repetition across the week.
+            </div>
+          ) : null}
+
+          {weekPlan && !isGeneratingWeek ? (
+            <>
+              <p className="planner-note">{weekPlan.note}</p>
+
+              <div className="week-list">
+                {weekPlan.days.map((day) => (
+                  <details key={day.date} className="week-day-card" open={day.date === weekPlan.startDate}>
+                    <summary className="week-day-summary">
+                      <div>
+                        <p className="section-kicker">Day</p>
+                        <h3>{formatDisplayDate(day.date)}</h3>
+                        <p className="portion-copy">
+                          {day.meals.map((meal) => meal.name).join(" • ")}
+                        </p>
+                      </div>
+                      <div className="week-day-meta">
+                        <strong>{day.totals.calories} kcal</strong>
+                        <span>
+                          {day.totals.protein}P / {day.totals.carbs}C / {day.totals.fat}F
+                        </span>
+                      </div>
+                    </summary>
+
+                    <div className="week-day-actions">
+                      <button className="ghost-button" onClick={() => regenerateWeekDay(day.date)} disabled={isGeneratingWeek}>
+                        Refresh this day
+                      </button>
+                    </div>
+
+                    <div className="week-meal-grid">
+                      {day.meals.map((meal) => {
+                        const portionSummary = getMealPortionSummary(meal.ingredients);
+                        return (
+                          <article key={meal.id} className={`mini-meal-card ${mealColorClass[meal.mealType]}`}>
+                            <p className="meal-type">{meal.mealType}</p>
+                            <h4>{meal.name}</h4>
+                            <p className="portion-copy">About {portionSummary.totalQuantity}g total</p>
+                            <p className="portion-copy">
+                              {portionSummary.mainIngredients.length
+                                ? portionSummary.mainIngredients
+                                    .map((ingredient) => `${Math.round(ingredient.quantity)}g ${ingredient.shortName}`)
+                                    .join(" + ")
+                                : `${meal.totalCalories} kcal`}
+                            </p>
+                            <div className="video-card mini-video-card">
+                              <span>Top recipe video</span>
+                              {mealVideos[meal.id] ? (
+                                <a
+                                  className="video-link"
+                                  href={mealVideos[meal.id]!.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {mealVideos[meal.id]!.thumbnailUrl ? (
+                                    <img
+                                      className="video-thumb"
+                                      src={mealVideos[meal.id]!.thumbnailUrl}
+                                      alt={mealVideos[meal.id]!.title}
+                                    />
+                                  ) : null}
+                                  <div className="video-copy">
+                                    <strong>{mealVideos[meal.id]!.title}</strong>
+                                    <p>
+                                      {mealVideos[meal.id]!.channelName}
+                                      {mealVideos[meal.id]!.duration ? ` • ${mealVideos[meal.id]!.duration}` : ""}
+                                    </p>
+                                  </div>
+                                </a>
+                              ) : (
+                                <p className="portion-copy">Finding the best recipe video for this meal...</p>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </details>
+                ))}
+              </div>
+
+              <div className="section-block weekly-grocery-block">
+                <p className="subheading">Weekly groceries</p>
+                <ul className="grocery-list weekly-grocery-list">
+                  {weekPlan.groceryList.map((item) => (
+                    <li key={item.ingredientId}>
+                      <span>{item.ingredientName}</span>
+                      <strong>{item.totalQuantity}g</strong>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          ) : null}
+        </section>
+
         <section className={activeTab === "reminders" ? "panel active-panel" : "panel hidden-panel"}>
           <div className="panel-heading">
             <div>
@@ -791,7 +1087,7 @@ function App() {
               ))}
             </div>
           ) : (
-            <div className="empty-state">Reminders will appear here once a plan is generated.</div>
+            <div className="empty-state">Reminders will appear here once a day plan is generated.</div>
           )}
         </section>
 
@@ -813,7 +1109,7 @@ function App() {
               ))}
             </ul>
           ) : (
-            <div className="empty-state">Your grocery list will be built from the generated day.</div>
+            <div className="empty-state">Your daily grocery list will be built from the generated day.</div>
           )}
         </section>
       </main>

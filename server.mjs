@@ -7,6 +7,8 @@ import { z } from "zod";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MODEL = process.env.XAI_MEAL_MODEL ?? "grok-4-1-fast-non-reasoning";
+const XAI_TIMEOUT_MS = Number(process.env.XAI_TIMEOUT_MS ?? 18000);
+const XAI_MAX_OUTPUT_TOKENS = Number(process.env.XAI_MAX_OUTPUT_TOKENS ?? 800);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distDir = path.join(__dirname, "dist");
@@ -98,7 +100,7 @@ const client = process.env.XAI_API_KEY
   ? new OpenAI({
       apiKey: process.env.XAI_API_KEY,
       baseURL: "https://api.x.ai/v1",
-      timeout: 45000
+      timeout: XAI_TIMEOUT_MS
     })
   : null;
 
@@ -113,9 +115,29 @@ function round(value) {
   return Math.round(value * 10) / 10;
 }
 
-function buildPrompt(profile, date) {
+function formatDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(startDate, offset) {
+  const nextDate = new Date(`${startDate}T12:00:00Z`);
+  nextDate.setUTCDate(nextDate.getUTCDate() + offset);
+  return formatDate(nextDate);
+}
+
+function buildPrompt(profile, date, options = {}) {
   const mealCountInstruction =
     profile.mealsPerDay === 4 ? "Create exactly 4 meals: breakfast, lunch, dinner, snack." : "Create exactly 3 meals: breakfast, lunch, dinner.";
+  const avoidMealsInstruction =
+    options.avoidMeals?.length
+      ? `- Avoid repeating these recent meal names if possible: ${options.avoidMeals.join(", ")}.`
+      : "";
+  const repeatMealsInstruction =
+    profile.allowRepeats && options.repeatFromMeals?.length
+      ? `- Repeating or lightly adapting these recent meals is okay for batch cooking or leftovers: ${options.repeatFromMeals.join(", ")}.`
+      : profile.allowRepeats
+        ? "- Repeating meals across the week is okay when it helps with batch cooking or leftovers."
+        : "- Prefer variety across the week rather than repeating the same meals.";
 
   return `
 Create a single-day meal plan for ${date}.
@@ -127,12 +149,17 @@ User profile:
 - Dietary pattern: ${profile.dietaryPattern}
 - Exclusions: ${profile.exclusions.length ? profile.exclusions.join(", ") : "none"}
 - Prep preference: ${profile.prepPreference}
+- Repeat meals / leftovers okay: ${profile.allowRepeats ? "yes" : "no"}
 - Goal: ${profile.goal}
 
 Requirements:
 - ${mealCountInstruction}
 - Make the meals realistic and cuisine-aware, prioritizing the preferred cuisine.
-- Keep meal names concise.
+- Keep meal names concise, under 5 words if possible.
+- Keep each meal simple: 2 to 4 ingredients only.
+- Prefer common dishes over creative variations.
+ - ${repeatMealsInstruction}
+ ${avoidMealsInstruction}
 - All ingredient amounts must be in grams.
 - Do not include explanations outside the meal fields.
 - Return valid JSON only.
@@ -232,6 +259,81 @@ function postProcessPlan(aiPlan) {
   };
 }
 
+function buildWeeklyPlan(days) {
+  const totals = days.reduce(
+    (accumulator, day) => ({
+      calories: round(accumulator.calories + day.totals.calories),
+      protein: round(accumulator.protein + day.totals.protein),
+      carbs: round(accumulator.carbs + day.totals.carbs),
+      fat: round(accumulator.fat + day.totals.fat)
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+
+  const ingredientMap = new Map();
+  for (const day of days) {
+    for (const item of day.groceryList) {
+      const existing = ingredientMap.get(item.ingredientId);
+      if (existing) {
+        existing.totalQuantity = round(existing.totalQuantity + item.totalQuantity);
+      } else {
+        ingredientMap.set(item.ingredientId, { ...item });
+      }
+    }
+  }
+
+  return {
+    startDate: days[0]?.date ?? formatDate(new Date()),
+    days,
+    totals,
+    groceryList: [...ingredientMap.values()].sort((a, b) => a.ingredientName.localeCompare(b.ingredientName)),
+    note: "AI-generated weekly plan with daily variety, weekly groceries, and reusable prep structure."
+  };
+}
+
+async function generateDailyPlan(profile, date, options = {}) {
+  const response = await client.responses.create({
+    model: MODEL,
+    max_output_tokens: XAI_MAX_OUTPUT_TOKENS,
+    input: [
+      {
+        role: "system",
+        content:
+          "You are a nutrition planning assistant. Return compact, practical, cuisine-aware meal plans as valid JSON only."
+      },
+      {
+        role: "user",
+        content: buildPrompt(profile, date, options)
+      }
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "ai_meal_plan",
+        strict: true,
+        schema: aiMealPlanJsonSchema
+      }
+    }
+  });
+
+  const message = response.output?.find((item) => item.type === "message");
+  const textContent = message?.content?.find((item) => item.type === "output_text");
+  const raw = textContent?.text ?? response.output_text;
+  if (!raw) {
+    throw new Error("Grok did not return a meal plan.");
+  }
+
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error("Grok returned incomplete JSON. Please try again.");
+  }
+
+  const aiPlan = aiMealPlanSchema.parse(json);
+  return postProcessPlan(aiPlan);
+}
+
 app.post("/api/meal-plan", async (req, res) => {
   if (!client) {
     return res.status(500).json({
@@ -244,51 +346,54 @@ app.post("/api/meal-plan", async (req, res) => {
     if (!profile || !date) {
       return res.status(400).json({ error: "Missing profile or date." });
     }
-
-    const response = await client.responses.create({
-      model: MODEL,
-      max_output_tokens: 1400,
-      input: [
-        {
-          role: "system",
-          content:
-            "You are a nutrition planning assistant. Return compact, practical, cuisine-aware meal plans as valid JSON only."
-        },
-        {
-          role: "user",
-          content: buildPrompt(profile, date)
-        }
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "ai_meal_plan",
-          strict: true,
-          schema: aiMealPlanJsonSchema
-        }
-      }
-    });
-
-    const message = response.output?.find((item) => item.type === "message");
-    const textContent = message?.content?.find((item) => item.type === "output_text");
-    const raw = textContent?.text ?? response.output_text;
-    if (!raw) {
-      return res.status(502).json({ error: "Grok did not return a meal plan." });
-    }
-
-    let json;
-    try {
-      json = JSON.parse(raw);
-    } catch {
-      return res.status(502).json({ error: "Grok returned incomplete JSON. Please try again." });
-    }
-
-    const aiPlan = aiMealPlanSchema.parse(json);
-    const plan = postProcessPlan(aiPlan);
+    const plan = await generateDailyPlan(profile, date);
     return res.json({ plan });
   } catch (error) {
     console.error("meal-plan error", error);
-    const message = error instanceof Error ? error.message : "The AI planner failed to generate a valid meal plan.";
+    const message =
+      error instanceof Error && /timeout/i.test(error.message)
+        ? "The AI planner took too long. Please try again."
+        : error instanceof Error
+          ? error.message
+          : "The AI planner failed to generate a valid meal plan.";
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/weekly-meal-plan", async (req, res) => {
+  if (!client) {
+    return res.status(500).json({
+      error: "XAI_API_KEY is not set on the server, so Grok meal plans cannot be generated yet."
+    });
+  }
+
+  try {
+    const { profile, startDate } = req.body ?? {};
+    if (!profile || !startDate) {
+      return res.status(400).json({ error: "Missing profile or startDate." });
+    }
+
+    const days = [];
+    const recentMealNames = [];
+    for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+      const date = addDays(startDate, dayIndex);
+      const dayPlan = await generateDailyPlan(profile, date, {
+        avoidMeals: profile.allowRepeats ? [] : recentMealNames.slice(-6),
+        repeatFromMeals: profile.allowRepeats ? recentMealNames.slice(-3) : []
+      });
+      days.push(dayPlan);
+      recentMealNames.push(...dayPlan.meals.map((meal) => meal.name));
+    }
+
+    return res.json({ weekPlan: buildWeeklyPlan(days) });
+  } catch (error) {
+    console.error("weekly-meal-plan error", error);
+    const message =
+      error instanceof Error && /timeout/i.test(error.message)
+        ? "The weekly AI planner took too long. Please try again."
+        : error instanceof Error
+          ? error.message
+          : "The AI planner failed to generate a valid weekly meal plan.";
     return res.status(500).json({ error: message });
   }
 });
