@@ -111,6 +111,33 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function normalizeIngredientName(value) {
+  return value
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\bplain\b/g, " ")
+    .replace(/\bcooked\b/g, " ")
+    .replace(/\bdry\b/g, " ")
+    .replace(/\sfresh\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatIngredientName(value) {
+  return value
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\bplain\b/gi, " ")
+    .replace(/\bcooked\b/gi, " ")
+    .replace(/\bdry\b/gi, " ")
+    .replace(/\sfresh\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getIngredientKey(value) {
+  return slugify(normalizeIngredientName(value));
+}
+
 function round(value) {
   return Math.round(value * 10) / 10;
 }
@@ -123,6 +150,10 @@ function addDays(startDate, offset) {
   const nextDate = new Date(`${startDate}T12:00:00Z`);
   nextDate.setUTCDate(nextDate.getUTCDate() + offset);
   return formatDate(nextDate);
+}
+
+function subtractDays(startDate, offset) {
+  return addDays(startDate, -offset);
 }
 
 function buildPrompt(profile, date, options = {}) {
@@ -166,7 +197,7 @@ Requirements:
 `.trim();
 }
 
-function inferReminders(meals) {
+function inferReminders(targetDate, meals) {
   const reminders = [];
 
   meals.forEach((meal, index) => {
@@ -176,23 +207,16 @@ function inferReminders(meals) {
         reminders.push({
           id: `reminder-soak-${index + 1}-${ingredient.ingredientId}`,
           type: "soak",
-          title: `Soak ${ingredient.ingredientName} ahead for ${meal.name}.`,
+          title: `Soak ${ingredient.ingredientName} for ${meal.name}.`,
           context: "night_before",
+          soakOnDate: subtractDays(targetDate, 1),
+          targetDate,
           linkedMealId: meal.id,
           linkedMealName: meal.name,
           linkedIngredientId: ingredient.ingredientId,
           linkedIngredientName: ingredient.ingredientName
         });
       }
-    });
-
-    reminders.push({
-      id: `reminder-prep-${index + 1}`,
-      type: "prep",
-      title: `Prep ingredients for ${meal.name} in advance.`,
-      context: meal.mealType === "breakfast" ? "night_before" : "after_dinner",
-      linkedMealId: meal.id,
-      linkedMealName: meal.name
     });
   });
 
@@ -211,8 +235,8 @@ function postProcessPlan(aiPlan) {
     totalFat: round(meal.totalFat),
     scaleFactor: 1,
     ingredients: meal.ingredients.map((ingredient) => ({
-      ingredientId: slugify(ingredient.ingredientName),
-      ingredientName: ingredient.ingredientName,
+      ingredientId: getIngredientKey(ingredient.ingredientName),
+      ingredientName: formatIngredientName(ingredient.ingredientName),
       quantity: round(ingredient.quantity),
       unit: "g",
       estimatedCalories: 0,
@@ -235,13 +259,14 @@ function postProcessPlan(aiPlan) {
   const ingredientMap = new Map();
   for (const meal of meals) {
     for (const ingredient of meal.ingredients) {
-      const existing = ingredientMap.get(ingredient.ingredientId);
+      const ingredientKey = getIngredientKey(ingredient.ingredientName);
+      const existing = ingredientMap.get(ingredientKey);
       if (existing) {
         existing.totalQuantity = round(existing.totalQuantity + ingredient.quantity);
       } else {
-        ingredientMap.set(ingredient.ingredientId, {
-          ingredientId: ingredient.ingredientId,
-          ingredientName: ingredient.ingredientName,
+        ingredientMap.set(ingredientKey, {
+          ingredientId: ingredientKey,
+          ingredientName: formatIngredientName(ingredient.ingredientName),
           totalQuantity: round(ingredient.quantity),
           unit: "g"
         });
@@ -253,7 +278,7 @@ function postProcessPlan(aiPlan) {
     date: aiPlan.date,
     meals,
     totals,
-    reminders: inferReminders(meals),
+    reminders: inferReminders(aiPlan.date, meals),
     groceryList: [...ingredientMap.values()].sort((a, b) => a.ingredientName.localeCompare(b.ingredientName)),
     note: "AI-generated day plan aligned to your calories, macros, cuisine preference, and prep style."
   };
@@ -273,11 +298,16 @@ function buildWeeklyPlan(days) {
   const ingredientMap = new Map();
   for (const day of days) {
     for (const item of day.groceryList) {
-      const existing = ingredientMap.get(item.ingredientId);
+      const ingredientKey = getIngredientKey(item.ingredientName);
+      const existing = ingredientMap.get(ingredientKey);
       if (existing) {
         existing.totalQuantity = round(existing.totalQuantity + item.totalQuantity);
       } else {
-        ingredientMap.set(item.ingredientId, { ...item });
+        ingredientMap.set(ingredientKey, {
+          ...item,
+          ingredientId: ingredientKey,
+          ingredientName: formatIngredientName(item.ingredientName)
+        });
       }
     }
   }
@@ -408,7 +438,7 @@ app.get("/api/recipe-video", async (req, res) => {
     const results = await ytsr(`${query} recipe`, { limit: 10 });
     const video = results.items.find((item) => item.type === "video");
 
-    if (!video || !("url" in video)) {
+    if (!video || !('url' in video)) {
       return res.status(404).json({ error: "No recipe video found." });
     }
 
