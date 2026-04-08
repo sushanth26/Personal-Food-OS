@@ -2,7 +2,7 @@
   font-family: "Avenir Next", "Segoe UI", sans-serif;
   color: #102116;
   background:
-    radial-gradient(circle at top, rgba(242, 193, 95, 0.35), transparent 28%),
+    redial-gradient(circle at top, rgba(242, 193, 95, 0.35), transparent 28%),
     linear-gradient(180deg, #f6f0e5 0%, #edf4ea 100%);
   line-height: 1.5;
   font-weight: 400;
@@ -32,16 +32,162 @@ select {
   padding: 16px 14px 28px;
 }
 
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.auth-card {
+  width: min(100%, 460px);
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(16, 33, 22, 0.08);
+  box-shadow: 0 18px 42px rgba(44, 63, 48, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 8vw, 2.6rem);
+  line-height: 0.96;
+}
+
+.auth-form,
+.auth-mode-row {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6a7b6c;
+  font-size: 0.9rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(16, 33, 22, 0.1);
+}
+
 .hero,
 .dashboard {
   display: grid;
   gap: 14px;
 }
 
-.tabs {
+.app-header {
   position: sticky;
   top: 10px;
   z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.user-menu {
+  position: relative;
+}
+
+.user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid rgba(16, 33, 22, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 12px 24px rgba(44, 63, 48, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.user-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.user-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #1f3a2c;
+  color: #f8f4ec;
+  font-weight: 700;
+}
+
+.user-menu-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(16, 33, 22, 0.08);
+  box-shadow: 0 18px 42px rgba(44, 63, 48, 0.14);
+  backdrop-filter: blur(16px);
+  z-index: 10;
+}
+
+.user-menu-summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(16, 33, 22, 0.08);
+}
+
+.user-menu-summary .user-avatar,
+.user-menu-summary .user-avatar-fallback {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+}
+
+.user-menu-summary strong,
+.user-menu-summary p {
+  margin: 0;
+}
+
+.user-menu-summary p {
+  color: #5b6d60;
+  font-size: 0.88rem;
+}
+
+.user-menu-item {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 14px;
+  text-align: left;
+  background: transparent;
+  color: #1f3a2c;
+  font-weight: 600;
+}
+
+.user-menu-item:hover {
+  background: rgba(31, 58, 44, 0.08);
+}
+
+.tabs {
   display: flex;
   gap: 8px;
   padding: 8px;
@@ -51,6 +197,7 @@ select {
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(16, 33, 22, 0.08);
   backdrop-filter: blur(14px);
+  min-width: 0;
 }
 
 .tabs::-webkit-scrollbar {
@@ -164,6 +311,25 @@ select {
   gap: 12px;
   align-items: flex-start;
   margin-bottom: 14px;
+}
+
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(31, 58, 44, 0.08);
+  color: #1f3a2c;
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 
 .panel-heading h2 {
@@ -575,6 +741,10 @@ select {
     padding: 24px;
   }
 
+  .app-header {
+    align-items: center;
+  }
+
   .macro-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -599,6 +769,7 @@ select {
     align-items: start;
   }
 
+  .app-header,
   .tabs {
     grid-column: 1 / -1;
   }
