@@ -1,5 +1,6 @@
 import { Reminder } from "../types";
 import { formatDisplayDate } from "../lib/foodUtils";
+import PanelHero from "./PanelHero";
 
 type ReminderGroup = {
   date: string;
@@ -19,6 +20,13 @@ export default function RemindersPanel({ groupedReminders }: RemindersPanelProps
           <h2>Soak reminders</h2>
         </div>
       </div>
+
+      <PanelHero
+        tone="reminders"
+        kicker="Prep timing"
+        title="Only the soak tasks worth remembering rise to the top"
+        chips={groupedReminders.length ? [`${groupedReminders.length} soak days`, "day-grouped", "from today onward"] : ["quiet by default", "only soak tasks", "date clear"]}
+      />
 
       {groupedReminders.length ? (
         <div className="reminder-list">

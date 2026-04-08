@@ -1,6 +1,7 @@
 import { RecipeVideo, WeeklyMealPlan } from "../types";
 import { mealColorClass } from "../lib/appConfig";
 import { formatDisplayDate, getMealPortionSummary } from "../lib/foodUtils";
+import PanelHero from "./PanelHero";
 
 type WeekPanelProps = {
   weekPlan: WeeklyMealPlan | null;
@@ -30,6 +31,13 @@ export default function WeekPanel({
           {isGeneratingWeek ? "Building week..." : "Regenerate week"}
         </button>
       </div>
+
+      <PanelHero
+        tone="week"
+        kicker="Weekly arc"
+        title="See the whole rhythm before the week begins"
+        chips={weekPlan ? [`${weekPlan.days.length} days`, "regenerate by day", "shared grocery flow"] : ["week builder", "variety-aware", "leftover-friendly"]}
+      />
 
       {weekError ? <div className="empty-state error-state">{weekError}</div> : null}
 
@@ -78,15 +86,21 @@ export default function WeekPanel({
                     const portionSummary = getMealPortionSummary(meal.ingredients);
                     return (
                       <article key={meal.id} className={`mini-meal-card ${mealColorClass[meal.mealType]}`}>
-                        <p className="meal-type">{meal.mealType}</p>
+                        <div className="mini-meal-topline">
+                          <p className="meal-type">{meal.mealType}</p>
+                          <span className="mini-meal-kcal">{meal.totalCalories} kcal</span>
+                        </div>
                         <h4>{meal.name}</h4>
-                        <p className="portion-copy">About {portionSummary.totalQuantity}g total</p>
-                        <p className="portion-copy">
+                        <div className="mini-meal-amount">
+                          <span>Eat</span>
+                          <strong>About {portionSummary.totalQuantity}g</strong>
+                        </div>
+                        <p className="portion-copy mini-meal-copy">
                           {portionSummary.mainIngredients.length
                             ? portionSummary.mainIngredients
                                 .map((ingredient) => `${Math.round(ingredient.quantity)}g ${ingredient.shortName}`)
                                 .join(" + ")
-                            : `${meal.totalCalories} kcal`}
+                            : `${meal.totalProtein}P / ${meal.totalCarbs}C / ${meal.totalFat}F`}
                         </p>
                         <div className="video-card mini-video-card">
                           <span>Top recipe video</span>
