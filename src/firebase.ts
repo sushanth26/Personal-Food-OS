@@ -1,12 +1,8 @@
 import { initializeApp } from "firebase/app";
 import {
-  OAuthProvider,
-  FacebookAuthProvider,
   GoogleAuthProvider,
   getAuth
 } from "firebase/auth";
-import firebase from "firebase/compat/app";
-import "firebase/compat/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -26,15 +22,10 @@ export const isFirebaseConfigured = Boolean(
 );
 
 const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
-const compatApp = isFirebaseConfigured ? (firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig)) : null;
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
-export const compatAuth = compatApp ? compatApp.auth() : null;
 
 export const googleProvider = new GoogleAuthProvider();
-export const facebookProvider = new FacebookAuthProvider();
-export const appleProvider = new OAuthProvider("apple.com");
 
 googleProvider.setCustomParameters({ prompt: "select_account" });
-facebookProvider.setCustomParameters({ display: "popup" });

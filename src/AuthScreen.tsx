@@ -1,87 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import type { User } from "firebase/auth";
-import firebase from "firebase/compat/app";
-import * as firebaseui from "firebaseui";
-import "firebaseui/dist/firebaseui.css";
-import { compatAuth, isFirebaseConfigured } from "./firebase";
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider, isFirebaseConfigured } from "./firebase";
 
 type AuthScreenProps = {
   onSignedIn: (user: User) => void;
 };
 
-const CONTAINER_ID = "firebaseui-auth-container";
-
 export default function AuthScreen({ onSignedIn }: AuthScreenProps) {
-  const [widgetError, setWidgetError] = useState<string | null>(null);
-  const [widgetMounted, setWidgetMounted] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
-  useEffect(() => {
-    if (!compatAuth) {
+  async function handleGoogleSignIn() {
+    if (!auth) {
+      setAuthError("Firebase is not configured yet for this app.");
       return;
     }
 
-    return compatAuth.onAuthStateChanged((nextUser) => {
-      if (nextUser) {
-        onSignedIn(nextUser as unknown as User);
-      }
-    });
-  }, [onSignedIn]);
+    setIsSigningIn(true);
+    setAuthError(null);
 
-  const uiConfig = useMemo<firebaseui.auth.Config>(
-    () => ({
-      signInFlow: "popup",
-      credentialHelper: firebaseui.auth.CredentialHelper.NONE,
-      signInOptions: [firebase.auth.GoogleAuthProvider.PROVIDER_ID],
-      callbacks: {
-        signInSuccessWithAuthResult: () => false
-      }
-    }),
-    []
-  );
-
-  useEffect(() => {
-    if (!compatAuth || !isFirebaseConfigured) {
-      return;
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      onSignedIn(result.user);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to sign in with Google right now.";
+      setAuthError(message);
+    } finally {
+      setIsSigningIn(false);
     }
-
-    const ui = firebaseui.auth.AuthUI.getInstance() ?? new firebaseui.auth.AuthUI(compatAuth);
-    setWidgetError(null);
-    setWidgetMounted(false);
-
-    const container = document.getElementById(CONTAINER_ID);
-    const observer =
-      container &&
-      new MutationObserver(() => {
-        if (container.childNodes.length > 0) {
-          setWidgetMounted(true);
-        }
-      });
-
-    if (container && observer) {
-      observer.observe(container, { childList: true, subtree: true });
-    }
-
-    const startupTimer = window.setTimeout(() => {
-      if (!container?.childNodes.length) {
-        setWidgetError("Sign-in options could not be displayed. Make sure Email, Google, Apple, and Facebook are enabled in Firebase Authentication.");
-      }
-    }, 2500);
-
-    Promise.resolve()
-      .then(() => {
-        ui.reset();
-        return ui.start(`#${CONTAINER_ID}`, uiConfig);
-      })
-      .catch((error) => {
-        setWidgetError(error instanceof Error ? error.message : "Unable to start Firebase sign-in.");
-      });
-
-    return () => {
-      window.clearTimeout(startupTimer);
-      observer?.disconnect();
-      ui.reset();
-    };
-  }, [uiConfig]);
+  }
 
   return (
     <div className="auth-shell">
@@ -92,18 +40,18 @@ export default function AuthScreen({ onSignedIn }: AuthScreenProps) {
           Sign in to keep your profile, weekly plans, reminders, and groceries attached to your account.
         </p>
 
-        {!isFirebaseConfigured || !compatAuth ? (
+        {!isFirebaseConfigured ? (
           <div className="empty-state error-state">
-            Firebase is not configured yet. Add your `VITE_FIREBASE_*` keys to enable email, Google, Apple, and
-            Facebook login.
+            Firebase is not configured yet. Add your `VITE_FIREBASE_*` keys to enable Google login.
           </div>
         ) : (
-          <>
-            <div id={CONTAINER_ID} style={{ minHeight: 280 }} />
-            {!widgetMounted && !widgetError ? <p className="helper-copy">Loading sign-in options...</p> : null}
-            {widgetError ? <div className="empty-state error-state">{widgetError}</div> : null}
-            <p className="helper-copy">Google sign-in is enabled first. We can add more providers after Firebase is configured for them.</p>
-          </>
+          <div className="auth-actions">
+            <button className="primary-button auth-google-button" type="button" onClick={handleGoogleSignIn} disabled={isSigningIn}>
+              {isSigningIn ? "Continuing..." : "Continue with Google"}
+            </button>
+            <p className="helper-copy">Google sign-in is enabled first. More providers can be added later if needed.</p>
+            {authError ? <div className="empty-state error-state">{authError}</div> : null}
+          </div>
         )}
       </section>
     </div>
