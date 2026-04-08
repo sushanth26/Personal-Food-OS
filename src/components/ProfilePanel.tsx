@@ -10,6 +10,7 @@ import {
   NutritionProfile,
   PrepPreference
 } from "../types";
+import PanelHero from "./PanelHero";
 
 type ProfilePanelProps = {
   saved: boolean;
@@ -62,6 +63,13 @@ export default function ProfilePanel({
           <h2>{saved && !editingProfile ? "Your current setup" : "Build your nutrition baseline"}</h2>
         </div>
       </div>
+
+      <PanelHero
+        tone="profile"
+        kicker="Food identity"
+        title="Set the rails once, then let the planner do the heavier lifting"
+        chips={[`${profile.cuisinePreference.replace("_", " ")}`, `${profile.mealsPerDay} meals`, profile.allowRepeats ? "repeats on" : "variety first"]}
+      />
 
       {!saved || editingProfile ? (
         <form

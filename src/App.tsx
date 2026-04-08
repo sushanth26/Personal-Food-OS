@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { User, onAuthStateChanged, signOut } from "firebase/auth";
 import AuthScreen from "./AuthScreen";
 import { loadCloudFoodState, saveCloudFoodState } from "./cloudState";
+import AppStage from "./components/AppStage";
 import DayPanel from "./components/DayPanel";
 import GroceriesPanel from "./components/GroceriesPanel";
 import ProfilePanel from "./components/ProfilePanel";
@@ -475,6 +476,7 @@ function App() {
     ? authUser?.email ?? authUser?.displayName ?? "Signed in"
     : "Local mode";
   const userInitial = (authUser?.displayName ?? authUser?.email ?? "U").trim().charAt(0).toUpperCase();
+  const cuisineLabel = profile.cuisinePreference.replace("_", " ");
 
   return (
     <div className="app-shell">
@@ -537,6 +539,14 @@ function App() {
             </div>
           ) : null}
         </div>
+
+        <AppStage
+          activeTab={activeTab}
+          calorieTarget={profile.calorieTarget}
+          cuisineLabel={cuisineLabel}
+          weekReady={Boolean(weekPlan)}
+          remindersCount={groupedReminders.reduce((sum, group) => sum + group.items.length, 0)}
+        />
 
         {activeTab === "profile" ? (
           <ProfilePanel
@@ -610,6 +620,24 @@ function App() {
               <div>
                 <p className="section-kicker">Family planning</p>
                 <h2>Coming soon</h2>
+              </div>
+            </div>
+
+            <div className="panel-hero panel-hero-family">
+              <div className="panel-hero-copy">
+                <p className="section-kicker">Next chapter</p>
+                <h3>Build one food system for more than one person</h3>
+                <div className="panel-hero-chip-row">
+                  <span className="panel-hero-chip">shared plans</span>
+                  <span className="panel-hero-chip">household groceries</span>
+                  <span className="panel-hero-chip">coming soon</span>
+                </div>
+              </div>
+              <div className="panel-hero-art" aria-hidden="true">
+                <div className="panel-hero-plate" />
+                <div className="panel-hero-garnish panel-hero-garnish-a" />
+                <div className="panel-hero-garnish panel-hero-garnish-b" />
+                <div className="panel-hero-garnish panel-hero-garnish-c" />
               </div>
             </div>
 

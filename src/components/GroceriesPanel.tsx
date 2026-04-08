@@ -1,4 +1,5 @@
 import { GroceryListItem } from "../types";
+import PanelHero from "./PanelHero";
 
 type GroupedGroceries = {
   fruits: GroceryListItem[];
@@ -62,6 +63,13 @@ export default function GroceriesPanel({
           </button>
         ) : null}
       </div>
+
+      <PanelHero
+        tone="groceries"
+        kicker="Store mode"
+        title="A cleaner shopping pass, not a spreadsheet"
+        chips={weekMode ? ["weekly list", "checklist mode", "grouped by section"] : ["day list", "checklist mode", "grouped by section"]}
+      />
 
       {hasGroceries ? (
         <>
