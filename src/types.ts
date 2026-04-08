@@ -113,6 +113,8 @@ export interface Reminder {
 export interface GroceryListItem {
   ingredientId: string;
   ingredientName: string;
+  canonicalName?: string;
+  category?: "fruits" | "vegetables" | "dry_items";
   totalQuantity: number;
   unit: string;
 }
