@@ -6,6 +6,10 @@ export const aiMealPlanSchema = z.object({
     z.object({
       mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
       name: z.string(),
+      serving: z.object({
+        primary: z.string(),
+        secondary: z.string().optional()
+      }),
       totalCalories: z.number(),
       totalProtein: z.number(),
       totalCarbs: z.number(),
@@ -34,6 +38,15 @@ export const aiMealPlanJsonSchema = {
         properties: {
           mealType: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] },
           name: { type: "string" },
+          serving: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              primary: { type: "string" },
+              secondary: { type: "string" }
+            },
+            required: ["primary"]
+          },
           totalCalories: { type: "number" },
           totalProtein: { type: "number" },
           totalCarbs: { type: "number" },
@@ -55,6 +68,7 @@ export const aiMealPlanJsonSchema = {
         required: [
           "mealType",
           "name",
+          "serving",
           "totalCalories",
           "totalProtein",
           "totalCarbs",

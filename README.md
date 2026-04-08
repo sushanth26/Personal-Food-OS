@@ -407,7 +407,8 @@ Notable details:
 
 - the app supports local mode when Firebase is not configured
 - once Firebase is configured, signed-in users get cloud persistence
-- the auth UI is powered by FirebaseUI
+- the auth UI currently uses Google popup sign-in via the Firebase SDK
+- Firebase Analytics can be enabled with the web measurement id for product event tracking
 
 ## Current Backend Limitations
 
@@ -448,6 +449,7 @@ VITE_FIREBASE_PROJECT_ID=your-project-id
 VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
 ## Run Locally
@@ -460,6 +462,7 @@ export VITE_FIREBASE_PROJECT_ID=your-project-id
 export VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
 export VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 export VITE_FIREBASE_APP_ID=your_app_id
+export VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 npm install
 npm run dev
 ```
@@ -489,6 +492,7 @@ VITE_FIREBASE_PROJECT_ID=your-project-id
 VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
 If Railway is connected to GitHub with auto-deploy on `main`, merging to `main` will trigger a deployment.

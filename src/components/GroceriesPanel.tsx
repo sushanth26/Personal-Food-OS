@@ -1,4 +1,6 @@
 import { GroceryListItem } from "../types";
+import AppIcon from "./AppIcon";
+import PanelHero from "./PanelHero";
 
 type GroupedGroceries = {
   fruits: GroceryListItem[];
@@ -23,14 +25,22 @@ export default function GroceriesPanel({
   onToggleItem,
   onResetChecks
 }: GroceriesPanelProps) {
-  function renderSection(title: string, items: GroceryListItem[], className: string) {
+  function renderSection(
+    title: string,
+    items: GroceryListItem[],
+    className: string,
+    iconName: "fruits" | "vegetables" | "dry_items"
+  ) {
     if (!items.length) {
       return null;
     }
 
     return (
       <div className={`section-block grocery-section ${className}`}>
-        <p className="subheading">{title}</p>
+        <p className="subheading section-heading-with-icon">
+          <AppIcon name={iconName} className="section-icon" />
+          <span>{title}</span>
+        </p>
         <ul className="grocery-list weekly-grocery-list">
           {items.map((item) => (
             <li key={item.ingredientId}>
@@ -58,10 +68,18 @@ export default function GroceriesPanel({
         </div>
         {hasGroceries ? (
           <button className="ghost-button" type="button" onClick={onResetChecks}>
+            <AppIcon name="reset" className="button-icon" />
             Reset checks
           </button>
         ) : null}
       </div>
+
+      <PanelHero
+        tone="groceries"
+        kicker="Store mode"
+        title="A cleaner shopping pass, not a spreadsheet"
+        chips={weekMode ? ["weekly list", "checklist mode", "grouped by section"] : ["day list", "checklist mode", "grouped by section"]}
+      />
 
       {hasGroceries ? (
         <>
@@ -70,9 +88,9 @@ export default function GroceriesPanel({
               ? "Everything you need for your current 7-day plan, grouped for an easier shop."
               : "Your current grocery list, grouped for an easier shop."}
           </p>
-          {renderSection("Fruits", groupedGroceries.fruits, "grocery-section-fruits")}
-          {renderSection("Vegetables", groupedGroceries.vegetables, "grocery-section-vegetables")}
-          {renderSection("Dry items", groupedGroceries.dry_items, "grocery-section-dry")}
+          {renderSection("Fruits", groupedGroceries.fruits, "grocery-section-fruits", "fruits")}
+          {renderSection("Vegetables", groupedGroceries.vegetables, "grocery-section-vegetables", "vegetables")}
+          {renderSection("Dry items", groupedGroceries.dry_items, "grocery-section-dry", "dry_items")}
         </>
       ) : (
         <div className="empty-state">Generate a day or week plan and your grocery list will appear here.</div>

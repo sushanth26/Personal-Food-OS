@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { User } from "firebase/auth";
 import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider, isFirebaseConfigured } from "./firebase";
+import { auth, googleProvider, isFirebaseConfigured, logAnalyticsEvent } from "./firebase";
 
 type AuthScreenProps = {
   onSignedIn: (user: User) => void;
@@ -19,12 +19,15 @@ export default function AuthScreen({ onSignedIn }: AuthScreenProps) {
 
     setIsSigningIn(true);
     setAuthError(null);
+    void logAnalyticsEvent("login_started", { method: "google" });
 
     try {
       const result = await signInWithPopup(auth, googleProvider);
+      void logAnalyticsEvent("login_success", { method: "google" });
       onSignedIn(result.user);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to sign in with Google right now.";
+      void logAnalyticsEvent("login_error", { method: "google" });
       setAuthError(message);
     } finally {
       setIsSigningIn(false);
@@ -34,11 +37,39 @@ export default function AuthScreen({ onSignedIn }: AuthScreenProps) {
   return (
     <div className="auth-shell">
       <section className="auth-card">
-        <p className="section-kicker">Personal Food OS</p>
-        <h1>Save your food system</h1>
-        <p className="helper-copy">
-          Sign in to keep your profile, weekly plans, reminders, and groceries attached to your account.
-        </p>
+        <div className="auth-art" aria-hidden="true">
+          <div className="auth-orb auth-orb-saffron" />
+          <div className="auth-orb auth-orb-leaf" />
+          <div className="auth-orb auth-orb-berry" />
+          <div className="auth-platter" />
+          <div className="auth-spark auth-spark-a" />
+          <div className="auth-spark auth-spark-b" />
+        </div>
+
+        <div className="auth-copy">
+          <p className="section-kicker">Personal Food OS</p>
+          <h1>Make your food system feel designed</h1>
+          <p className="helper-copy">
+            Sign in to keep your profile, weekly plans, reminders, and groceries attached to your account.
+          </p>
+
+          <div className="auth-pill-row">
+            <span className="auth-pill">Weekly planning</span>
+            <span className="auth-pill">Smart groceries</span>
+            <span className="auth-pill">Soak reminders</span>
+          </div>
+        </div>
+
+        <div className="auth-value-grid">
+          <div className="auth-value-card">
+            <span>Plan once</span>
+            <strong>See the whole week</strong>
+          </div>
+          <div className="auth-value-card">
+            <span>Shop better</span>
+            <strong>Cleaner grocery flow</strong>
+          </div>
+        </div>
 
         {!isFirebaseConfigured ? (
           <div className="empty-state error-state">
@@ -49,7 +80,6 @@ export default function AuthScreen({ onSignedIn }: AuthScreenProps) {
             <button className="primary-button auth-google-button" type="button" onClick={handleGoogleSignIn} disabled={isSigningIn}>
               {isSigningIn ? "Continuing..." : "Continue with Google"}
             </button>
-            <p className="helper-copy">Google sign-in is enabled first. More providers can be added later if needed.</p>
             {authError ? <div className="empty-state error-state">{authError}</div> : null}
           </div>
         )}

@@ -1,4 +1,4 @@
-import { DailyMealPlan, GroceryListItem, Reminder, WeeklyMealPlan } from "../types";
+import { DailyMealPlan, GroceryListItem, PlannedMeal, Reminder, WeeklyMealPlan } from "../types";
 
 export function formatIngredientLabel(name: string) {
   return name
@@ -19,7 +19,7 @@ export function getMealPortionSummary(
       const lower = ingredient.ingredientName.toLowerCase();
       return (
         ingredient.quantity >= 40 &&
-        !/(oil|spice|masala|ginger|garlic|chili|coriander|lemon juice)/.test(lower)
+        !/(oil|spice|masala|ginger|garlic|chili|coriander|lemon juice|tomato puree|tomato paste|water)/.test(lower)
       );
     })
     .sort((a, b) => b.quantity - a.quantity)
@@ -30,6 +30,126 @@ export function getMealPortionSummary(
     }));
 
   return { totalQuantity, mainIngredients };
+}
+
+function isMealBaseIngredient(name: string) {
+  return /(tomato|onion|puree|paste|masala|gravy|sauce|water|oil)/.test(name.toLowerCase());
+}
+
+function formatFocusIngredient(name: string) {
+  const clean = formatIngredientLabel(name).toLowerCase();
+
+  if (/kidney bean/.test(clean)) {
+    return "kidney bean curry";
+  }
+
+  if (/chickpea|chole|chana/.test(clean)) {
+    return "chickpea curry";
+  }
+
+  if (/moong dal/.test(clean)) {
+    return "moong dal";
+  }
+
+  if (/dal|lentil/.test(clean)) {
+    return "dal";
+  }
+
+  if (/paneer/.test(clean)) {
+    return "paneer";
+  }
+
+  if (/rice/.test(clean)) {
+    return "rice";
+  }
+
+  if (/spinach/.test(clean)) {
+    return "spinach";
+  }
+
+  return clean;
+}
+
+function inferServingPrimaryFallback(meal: PlannedMeal) {
+  const lowerName = meal.name.toLowerCase();
+
+  if (/(roti|chapati|phulka)/.test(lowerName)) {
+    return "2 rotis with your main dish";
+  }
+
+  if (/(paratha|dosa|cheela|chilla|uttapam)/.test(lowerName)) {
+    return `1 plate ${lowerName}`;
+  }
+
+  if (/idli/.test(lowerName)) {
+    return "3 idlis";
+  }
+
+  if (/(rice|poha|upma|pulao|biryani|khichdi|oats|dal|rajma|chole|sabzi|paneer|curry|sambar)/.test(lowerName)) {
+    return `1 bowl ${lowerName}`;
+  }
+
+  return meal.mealType === "snack" ? `1 serving ${lowerName}` : `1 serving ${lowerName}`;
+}
+
+export function getMealServingDisplay(meal: PlannedMeal) {
+  const portionSummary = getMealPortionSummary(meal.ingredients);
+  const focusIngredients = portionSummary.mainIngredients.filter((ingredient) => !isMealBaseIngredient(ingredient.shortName));
+  const namedFocusIngredients = (focusIngredients.length ? focusIngredients : portionSummary.mainIngredients).map((ingredient) =>
+    formatFocusIngredient(ingredient.shortName)
+  );
+  const primary = meal.serving?.primary?.trim() || inferServingPrimaryFallback(meal);
+  const secondary = meal.serving?.secondary?.trim() || "";
+  const detail =
+    namedFocusIngredients.length > 1
+      ? `Main ingredients: ${namedFocusIngredients.join(" and ")}`
+      : "";
+
+  return {
+    primary,
+    secondary,
+    detail,
+    totalQuantity: portionSummary.totalQuantity
+  };
+}
+
+export function getMealBalanceSummary(meal: PlannedMeal) {
+  const protein = meal.totalProtein;
+  const carbs = meal.totalCarbs;
+  const fat = meal.totalFat;
+
+  const proteinStrong = protein >= 20;
+  const carbPresent = carbs >= 18;
+  const fatPresent = fat >= 6;
+
+  let label = "Balanced meal";
+  if (proteinStrong && carbPresent && fatPresent) {
+    label = "Balanced meal";
+  } else if (proteinStrong && carbPresent) {
+    label = "Protein + carb balanced";
+  } else if (proteinStrong) {
+    label = "Protein-forward";
+  } else if (carbPresent && !proteinStrong) {
+    label = "Carb-forward";
+  } else if (fatPresent && !proteinStrong && !carbPresent) {
+    label = "Light meal";
+  }
+
+  const parts = [];
+  if (protein >= 12) {
+    parts.push("protein");
+  }
+  if (carbs >= 15) {
+    parts.push("carbs");
+  }
+  if (fat >= 6) {
+    parts.push("healthy fats");
+  }
+
+  return {
+    label,
+    detail: parts.length >= 2 ? `Covers ${parts.join(", ")}` : ""
+  };
 }
 
 export function formatContext(context: string) {

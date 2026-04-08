@@ -1,6 +1,8 @@
 import { RecipeVideo, WeeklyMealPlan } from "../types";
 import { mealColorClass } from "../lib/appConfig";
-import { formatDisplayDate, getMealPortionSummary } from "../lib/foodUtils";
+import { formatDisplayDate, getMealBalanceSummary, getMealServingDisplay } from "../lib/foodUtils";
+import AppIcon from "./AppIcon";
+import PanelHero from "./PanelHero";
 
 type WeekPanelProps = {
   weekPlan: WeeklyMealPlan | null;
@@ -30,6 +32,13 @@ export default function WeekPanel({
           {isGeneratingWeek ? "Building week..." : "Regenerate week"}
         </button>
       </div>
+
+      <PanelHero
+        tone="week"
+        kicker="Weekly arc"
+        title="See the whole rhythm before the week begins"
+        chips={weekPlan ? [`${weekPlan.days.length} days`, "regenerate by day", "shared grocery flow"] : ["week builder", "variety-aware", "leftover-friendly"]}
+      />
 
       {weekError ? <div className="empty-state error-state">{weekError}</div> : null}
 
@@ -73,23 +82,36 @@ export default function WeekPanel({
                   </button>
                 </div>
 
-                <div className="week-meal-grid">
+                  <div className="week-meal-grid">
                   {day.meals.map((meal) => {
-                    const portionSummary = getMealPortionSummary(meal.ingredients);
+                    const servingDisplay = getMealServingDisplay(meal);
+                    const balanceSummary = getMealBalanceSummary(meal);
                     return (
                       <article key={meal.id} className={`mini-meal-card ${mealColorClass[meal.mealType]}`}>
-                        <p className="meal-type">{meal.mealType}</p>
+                        <div className="mini-meal-topline">
+                          <p className="meal-type">{meal.mealType}</p>
+                          <span className="mini-meal-kcal">{meal.totalCalories} kcal</span>
+                        </div>
                         <h4>{meal.name}</h4>
-                        <p className="portion-copy">About {portionSummary.totalQuantity}g total</p>
-                        <p className="portion-copy">
-                          {portionSummary.mainIngredients.length
-                            ? portionSummary.mainIngredients
-                                .map((ingredient) => `${Math.round(ingredient.quantity)}g ${ingredient.shortName}`)
-                                .join(" + ")
-                            : `${meal.totalCalories} kcal`}
-                        </p>
+                        <div className="mini-meal-amount">
+                          <span>Eat</span>
+                          <strong>{servingDisplay.primary}</strong>
+                        </div>
+                        <div className="meal-balance-row mini-balance-row">
+                          <AppIcon name="balance" className="balance-icon" />
+                          <span className="meal-balance-chip">{balanceSummary.label}</span>
+                        </div>
+                        {servingDisplay.secondary ? (
+                          <p className="portion-copy mini-meal-copy">{servingDisplay.secondary}</p>
+                        ) : null}
+                        {servingDisplay.detail ? (
+                          <p className="portion-copy mini-meal-detail">{servingDisplay.detail}</p>
+                        ) : null}
                         <div className="video-card mini-video-card">
-                          <span>Top recipe video</span>
+                          <span className="video-title-row">
+                            <AppIcon name="spark" className="video-title-icon" />
+                            <span>Top recipe video</span>
+                          </span>
                           {mealVideos[meal.id] ? (
                             <a className="video-link" href={mealVideos[meal.id]!.url} target="_blank" rel="noreferrer">
                               {mealVideos[meal.id]!.thumbnailUrl ? (
