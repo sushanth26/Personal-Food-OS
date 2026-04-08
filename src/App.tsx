@@ -1,4 +1,23 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { User, onAuthStateChanged, signOut } from "firebase/auth";
+import AuthScreen from "./AuthScreen";
+import { loadCloudFoodState, saveCloudFoodState } from "./cloudState";
+import DayPanel from "./components/DayPanel";
+import GroceriesPanel from "./components/GroceriesPanel";
+import ProfilePanel from "./components/ProfilePanel";
+import RemindersPanel from "./components/RemindersPanel";
+import TabsNav from "./components/TabsNav";
+import WeekPanel from "./components/WeekPanel";
+import { auth, isFirebaseConfigured } from "./firebase";
+import { API_BASE_URL, defaultProfile, exclusionOptions, TabId } from "./lib/appConfig";
+import {
+  buildWeeklyPlanFromDays,
+  getDisplayedReminders,
+  getTodayDate,
+  getWeekStartDate,
+  groupGroceryItems,
+  groupRemindersBySoakDate
+} from "./lib/foodUtils";
 import { deriveMacroTargets, estimateDailyCalories } from "./planner";
 import {
   loadCheckedGroceries,
@@ -10,368 +29,12 @@ import {
   saveProfile,
   saveWeekPlan
 } from "./storage";
-import {
-  ActivityLevel,
-  BiologicalSex,
-  CuisinePreference,
-  DailyMealPlan,
-  DietaryPattern,
-  Exclusion,
-  Goal,
-  MacroMode,
-  MacroPreset,
-  NutritionProfile,
-  PrepPreference,
-  WeeklyMealPlan
-} from "./types";
-import type { GroceryListItem, RecipeVideo } from "./types";
-
-const exclusionOptions: Exclusion[] = ["dairy", "eggs", "nuts", "gluten"];
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ??
-  (import.meta.env.DEV ? "http://127.0.0.1:8787" : "")
-).replace(/\/$/, "");
-const tabs = [
-  { id: "profile", label: "Profile" },
-  { id: "day", label: "Day" },
-  { id: "week", label: "Week" },
-  { id: "reminders", label: "Reminders" },
-  { id: "groceries", label: "Groceries" }
-] as const;
-
-type TabId = (typeof tabs)[number]["id"];
-
-const mealColorClass: Record<string, string> = {
-  breakfast: "meal-breakfast",
-  lunch: "meal-lunch",
-  dinner: "meal-dinner",
-  snack: "meal-snack"
-};
-
-function formatIngredientLabel(name: string) {
-  return name
-    .replace(/\s*\([^)]*\)/g, "")
-    .replace(/\bplain\b/gi, "")
-    .replace(/\bcooked\b/gi, "")
-    .replace(/\bdry\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function getGroceryKey(name: string) {
-  return formatIngredientLabel(name)
-    .toLowerCase()
-    .replace(/\sfresh\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function titleCaseWords(value: string) {
-  return value.replace(/\b[a-z]/g, (match) => match.toUpperCase());
-}
-
-function getGroceryCategory(name: string) {
-  const normalized = getDedupedGroceryKey(name);
-
-  if (/(apple|banana|orange|mango|papaya|berry|berries|grape|guava|melon|pineapple|pear|pomegranate)/.test(normalized)) {
-    return "fruits";
-  }
-
-  if (
-    /(spinach|palak|onion|tomato|cucumber|carrot|beans|capsicum|pepper|broccoli|cauliflower|cabbage|okra|bhindi|eggplant|brinjal|peas|potato|sweet potato|lettuce|mint|coriander|cilantro|ginger|garlic|chili|lemon|lime)/.test(
-      normalized
-    )
-  ) {
-    return "vegetables";
-  }
-
-  return "dry_items";
-}
-
-function singularizeWord(value: string) {
-  if (value.endsWith("ies")) {
-    return `${value.slice(0, -3)}y`;
-  }
-
-  if (value.endsWith("oes")) {
-    return value.slice(0, -2);
-  }
-
-  if (value.endsWith("s") && !value.endsWith("ss")) {
-    return value.slice(0, -1);
-  }
-
-  return value;
-}
-
-function getDedupedGroceryKey(name: string) {
-  return getGroceryKey(name)
-    .split(" ")
-    .map((part) => singularizeWord(part))
-    .join(" ")
-    .replace(/\bboneless\b/g, "")
-    .replace(/\bskinless\b/g, "")
-    .replace(/\braw\b/g, "")
-    .replace(/\bboiled\b/g, "")
-    .replace(/\broasted\b/g, "")
-    .replace(/\bsauteed\b/g, "")
-    .replace(/\bstir fried\b/g, "")
-    .replace(/\bsteamed\b/g, "")
-    .replace(/\bsoaked\b/g, "")
-    .replace(/\bmarinated\b/g, "")
-    .replace(/\bcrumbled\b/g, "")
-    .replace(/\bcube\b/g, "")
-    .replace(/\bcubed\b/g, "")
-    .replace(/\bcubes\b/g, "")
-    .replace(/\bdiced\b/g, "")
-    .replace(/\bsliced\b/g, "")
-    .replace(/\bchopped\b/g, "")
-    .replace(/\bminced\b/g, "")
-    .replace(/\bmashed\b/g, "")
-    .replace(/\bshredded\b/g, "")
-    .replace(/\bgrated\b/g, "")
-    .replace(/\bhalved\b/g, "")
-    .replace(/\bquartered\b/g, "")
-    .replace(/\bpieces\b/g, "")
-    .replace(/\bpiece\b/g, "")
-    .replace(/\bfillet\b/g, "")
-    .replace(/\bbreast\b/g, "")
-    .replace(/\bthigh\b/g, "")
-    .replace(/\bdrumstick\b/g, "")
-    .replace(/\brolled\b/g, "")
-    .replace(/\bsteel cut\b/g, "")
-    .replace(/\bquick\b/g, "")
-    .replace(/\bextra virgin\b/g, "")
-    .replace(/\bvirgin\b/g, "")
-    .replace(/\blow fat\b/g, "")
-    .replace(/\bfull fat\b/g, "")
-    .replace(/\bnonfat\b/g, "")
-    .replace(/\bunsweetened\b/g, "")
-    .replace(/\bseedless\b/g, "")
-    .replace(/\bwhole wheat roti\b/g, "whole wheat flour")
-    .replace(/\bwhole wheat chapati\b/g, "whole wheat flour")
-    .replace(/\bwhole wheat flour dough\b/g, "whole wheat flour")
-    .replace(/\broti dough\b/g, "whole wheat flour")
-    .replace(/\bchapati dough\b/g, "whole wheat flour")
-    .replace(/\bparatha dough\b/g, "whole wheat flour")
-    .replace(/\bdough\b/g, "")
-    .replace(/\broti\b/g, "whole wheat flour")
-    .replace(/\bchapati\b/g, "whole wheat flour")
-    .replace(/\bparatha\b/g, "whole wheat flour")
-    .replace(/\bgreen chili\b/g, "chili")
-    .replace(/\bred chili\b/g, "chili")
-    .replace(/\bchillies\b/g, "chili")
-    .replace(/\bchilies\b/g, "chili")
-    .replace(/\bcilantro\b/g, "coriander")
-    .replace(/\bcurd\b/g, "yogurt")
-    .replace(/\bgarbanzo bean\b/g, "chickpea")
-    .replace(/\bgarbanzo\b/g, "chickpea")
-    .replace(/\bchole\b/g, "chickpea")
-    .replace(/\btoor dal\b/g, "dal")
-    .replace(/\bmoong dal\b/g, "dal")
-    .replace(/\bmasoor dal\b/g, "dal")
-    .replace(/\bchana dal\b/g, "dal")
-    .replace(/\bbasmati rice\b/g, "rice")
-    .replace(/\bbrown rice\b/g, "rice")
-    .replace(/\bwhite rice\b/g, "rice")
-    .replace(/\bjasmine rice\b/g, "rice")
-    .replace(/\bgreek yogurt\b/g, "yogurt")
-    .replace(/\bhung curd\b/g, "yogurt")
-    .replace(/\brolled oat\b/g, "oat")
-    .replace(/\boatmeal\b/g, "oat")
-    .replace(/\boat\b/g, "oats")
-    .replace(/\bchicken breast\b/g, "chicken")
-    .replace(/\bchicken thigh\b/g, "chicken")
-    .replace(/\bchicken drumstick\b/g, "chicken")
-    .replace(/\bground chicken\b/g, "chicken")
-    .replace(/\bground turkey\b/g, "turkey")
-    .replace(/\begg white\b/g, "egg")
-    .replace(/\begg yolk\b/g, "egg")
-    .replace(/\bscallion\b/g, "spring onion")
-    .replace(/\bspring onions\b/g, "spring onion")
-    .replace(/\bgreen onion\b/g, "spring onion")
-    .replace(/\bgreen onions\b/g, "spring onion")
-    .replace(/\bbell pepper\b/g, "capsicum")
-    .replace(/\bbell peppers\b/g, "capsicum")
-    .replace(/\bwhole wheat flour whole wheat flour\b/g, "whole wheat flour")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function getCanonicalGroceryName(name: string) {
-  const normalized = getDedupedGroceryKey(name);
-  return titleCaseWords(normalized || formatIngredientLabel(name));
-}
-
-function groupGroceryItems(items: GroceryListItem[]) {
-  const grouped = {
-    fruits: [] as GroceryListItem[],
-    vegetables: [] as GroceryListItem[],
-    dry_items: [] as GroceryListItem[]
-  };
-  const seen = new Set<string>();
-
-  items.forEach((item) => {
-    const dedupedKey = getDedupedGroceryKey(item.ingredientName);
-    if (seen.has(dedupedKey)) {
-      return;
-    }
-
-    seen.add(dedupedKey);
-    grouped[getGroceryCategory(item.ingredientName)].push({
-      ...item,
-      ingredientId: dedupedKey,
-      ingredientName: getCanonicalGroceryName(item.ingredientName)
-    });
-  });
-
-  return grouped;
-}
-
-function getMealPortionSummary(
-  ingredients: Array<{ ingredientName: string; quantity: number }>
-) {
-  const totalQuantity = Math.round(ingredients.reduce((sum, ingredient) => sum + ingredient.quantity, 0));
-  const mainIngredients = [...ingredients]
-    .filter((ingredient) => {
-      const lower = ingredient.ingredientName.toLowerCase();
-      return (
-        ingredient.quantity >= 40 &&
-        !/(oil|spice|masala|ginger|garlic|chili|coriander|lemon juice)/.test(lower)
-      );
-    })
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 2)
-    .map((ingredient) => ({
-      ...ingredient,
-      shortName: formatIngredientLabel(ingredient.ingredientName)
-    }));
-
-  return { totalQuantity, mainIngredients };
-}
-
-function formatContext(context: string) {
-  return context.replaceAll("_", " ");
-}
-
-function formatDisplayDate(value: string) {
-  if (!value) {
-    return "unscheduled day";
-  }
-
-  const date = new Date(`${value}T12:00:00Z`);
-  if (Number.isNaN(date.getTime())) {
-    return "unscheduled day";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric"
-  }).format(date);
-}
-
-function getDisplayedReminders(plan: DailyMealPlan | null, weekPlan: WeeklyMealPlan | null) {
-  if (weekPlan) {
-    return weekPlan.days.flatMap((day) => day.reminders);
-  }
-
-  return plan?.reminders ?? [];
-}
-
-function groupRemindersBySoakDate(reminders: ReturnType<typeof getDisplayedReminders>) {
-  const today = new Date().toISOString().slice(0, 10);
-  const reminderMap = new Map<string, typeof reminders>();
-
-  reminders.forEach((reminder) => {
-    const key = reminder.soakOnDate ?? reminder.targetDate ?? "unscheduled";
-    if (key !== "unscheduled" && key < today) {
-      return;
-    }
-    const group = reminderMap.get(key) ?? [];
-    group.push(reminder);
-    reminderMap.set(key, group);
-  });
-
-  return [...reminderMap.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([date, items]) => ({ date, items }));
-}
-
-function getWeekStartDate() {
-  const today = new Date();
-  const day = today.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  today.setDate(today.getDate() + diff);
-  return today.toISOString().slice(0, 10);
-}
-
-function getTodayDate() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function aggregateWeeklyGroceryList(days: DailyMealPlan[]): GroceryListItem[] {
-  const ingredientMap = new Map<string, GroceryListItem>();
-
-  for (const day of days) {
-    for (const item of day.groceryList) {
-      const itemKey = getGroceryKey(item.ingredientName);
-      const existing = ingredientMap.get(itemKey);
-      if (existing) {
-        existing.totalQuantity = Math.round((existing.totalQuantity + item.totalQuantity) * 10) / 10;
-      } else {
-        ingredientMap.set(itemKey, {
-          ...item,
-          ingredientId: itemKey,
-          ingredientName: formatIngredientLabel(item.ingredientName)
-        });
-      }
-    }
-  }
-
-  return [...ingredientMap.values()].sort((a, b) => a.ingredientName.localeCompare(b.ingredientName));
-}
-
-function buildWeeklyPlanFromDays(startDate: string, days: DailyMealPlan[]): WeeklyMealPlan {
-  const totals = days.reduce(
-    (accumulator, day) => ({
-      calories: Math.round((accumulator.calories + day.totals.calories) * 10) / 10,
-      protein: Math.round((accumulator.protein + day.totals.protein) * 10) / 10,
-      carbs: Math.round((accumulator.carbs + day.totals.carbs) * 10) / 10,
-      fat: Math.round((accumulator.fat + day.totals.fat) * 10) / 10
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
-  );
-
-  return {
-    startDate,
-    days,
-    totals,
-    groceryList: aggregateWeeklyGroceryList(days),
-    note: "AI-generated weekly plan with day-by-day meals and one combined grocery list."
-  };
-}
-
-const defaultProfile: NutritionProfile = {
-  calorieTarget: 2100,
-  sex: "male",
-  age: 30,
-  heightCm: 175,
-  weightKg: 75,
-  activityLevel: "moderate",
-  goal: "maintain",
-  cuisinePreference: "indian",
-  macroMode: "split",
-  macroPreset: "balanced",
-  macroTargets: deriveMacroTargets(2100, "split", "balanced"),
-  dietaryPattern: "omnivore",
-  exclusions: [],
-  mealsPerDay: 3,
-  prepPreference: "low",
-  allowRepeats: true
-};
+import { DailyMealPlan, NutritionProfile, RecipeVideo, WeeklyMealPlan } from "./types";
 
 function App() {
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [cloudLoading, setCloudLoading] = useState(false);
   const [profile, setProfile] = useState<NutritionProfile>(defaultProfile);
   const [ageInput, setAgeInput] = useState(String(defaultProfile.age));
   const [heightInput, setHeightInput] = useState(String(defaultProfile.heightCm));
@@ -387,18 +50,66 @@ function App() {
   const [isGeneratingWeek, setIsGeneratingWeek] = useState(false);
   const [mealVideos, setMealVideos] = useState<Record<string, RecipeVideo | null>>({});
   const [checkedGroceries, setCheckedGroceries] = useState<string[]>(() => loadCheckedGroceries());
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
-    const storedProfile = loadProfile();
-    if (!storedProfile) {
+    if (!auth) {
+      setAuthReady(true);
       return;
     }
 
-    setProfile(storedProfile);
-    setAgeInput(String(storedProfile.age));
-    setHeightInput(String(storedProfile.heightCm));
-    setWeightInput(String(storedProfile.weightKg));
-    setSaved(true);
+    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
+      setAuthUser(nextUser);
+
+      if (!nextUser) {
+        setAuthReady(true);
+        return;
+      }
+
+      setCloudLoading(true);
+
+      try {
+        const localProfile = loadProfile();
+        const localPlan = loadPlan();
+        const localWeekPlan = loadWeekPlan();
+        const cloudState = await loadCloudFoodState(nextUser.uid);
+
+        const nextProfile = cloudState.profile ?? localProfile ?? defaultProfile;
+        const nextPlan = cloudState.plan ?? localPlan;
+        const nextWeekPlan = cloudState.weekPlan ?? localWeekPlan;
+
+        setProfile(nextProfile);
+        setAgeInput(String(nextProfile.age));
+        setHeightInput(String(nextProfile.heightCm));
+        setWeightInput(String(nextProfile.weightKg));
+        setPlan(nextPlan);
+        setWeekPlan(nextWeekPlan);
+        setSaved(Boolean(cloudState.profile ?? localProfile));
+
+        saveProfile(nextProfile);
+        if (nextPlan) {
+          savePlan(nextPlan);
+        }
+        if (nextWeekPlan) {
+          saveWeekPlan(nextWeekPlan);
+        }
+
+        if (!cloudState.profile && (localProfile || localPlan || localWeekPlan)) {
+          await saveCloudFoodState(nextUser.uid, {
+            profile: localProfile ?? nextProfile,
+            plan: localPlan ?? null,
+            weekPlan: localWeekPlan ?? null
+          });
+        }
+      } catch (error) {
+        console.error("cloud-state load error", error);
+      } finally {
+        setCloudLoading(false);
+        setAuthReady(true);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -422,23 +133,19 @@ function App() {
     profile.macroMode === "split"
       ? deriveMacroTargets(profile.calorieTarget, "split", profile.macroPreset)
       : profile.macroTargets;
+  const showProfileTab = !saved || editingProfile;
+
+  useEffect(() => {
+    if (!showProfileTab && activeTab === "profile") {
+      setActiveTab("day");
+    }
+  }, [activeTab, showProfileTab]);
+
   const todayDate = getTodayDate();
-  const currentWeekDayPlan = weekPlan?.days.find((day) => day.date === todayDate) ?? null;
-  const activeDayPlan = currentWeekDayPlan ?? plan;
-  const displayedReminders = getDisplayedReminders(plan, weekPlan);
-  const groupedReminders = groupRemindersBySoakDate(displayedReminders);
+  const activeDayPlan = weekPlan?.days.find((day) => day.date === todayDate) ?? plan;
+  const groupedReminders = groupRemindersBySoakDate(getDisplayedReminders(plan, weekPlan));
   const displayedGroceries = weekPlan?.groceryList ?? activeDayPlan?.groceryList ?? [];
   const groupedGroceries = groupGroceryItems(displayedGroceries);
-
-  function toggleGroceryItem(itemId: string) {
-    setCheckedGroceries((current) =>
-      current.includes(itemId) ? current.filter((entry) => entry !== itemId) : [...current, itemId]
-    );
-  }
-
-  function clearCheckedGroceries() {
-    setCheckedGroceries([]);
-  }
 
   useEffect(() => {
     const mealsToLoad = [
@@ -483,11 +190,28 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [plan, weekPlan, profile.cuisinePreference]);
+  }, [plan, profile.cuisinePreference, weekPlan]);
+
+  function updateProfile(updater: (current: NutritionProfile) => NutritionProfile) {
+    setProfile(updater);
+  }
 
   function persistProfile() {
-    const nextProfile = updateDerivedTargets(profile);
+    const nextProfile =
+      profile.macroMode === "split"
+        ? {
+            ...profile,
+            macroTargets: deriveMacroTargets(profile.calorieTarget, "split", profile.macroPreset)
+          }
+        : profile;
+
     saveProfile(nextProfile);
+    if (authUser) {
+      saveCloudFoodState(authUser.uid, { profile: nextProfile }).catch((error) => {
+        console.error("profile save error", error);
+      });
+    }
+
     setProfile(nextProfile);
     setAgeInput(String(nextProfile.age));
     setHeightInput(String(nextProfile.heightCm));
@@ -515,7 +239,19 @@ function App() {
     return next;
   }
 
-  async function requestMealPlan(nextProfile: NutritionProfile) {
+  async function safeSaveCloudState(state: Parameters<typeof saveCloudFoodState>[1]) {
+    if (!authUser) {
+      return;
+    }
+
+    try {
+      await saveCloudFoodState(authUser.uid, state);
+    } catch (error) {
+      console.error("cloud-state save error", error);
+    }
+  }
+
+  async function requestMealPlan(nextProfile: NutritionProfile, date = todayDate) {
     setIsGenerating(true);
     setPlanError(null);
     setActiveTab("day");
@@ -523,13 +259,8 @@ function App() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/meal-plan`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          profile: nextProfile,
-          date: new Date().toISOString().slice(0, 10)
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: nextProfile, date })
       });
 
       const raw = await response.text();
@@ -540,11 +271,15 @@ function App() {
 
       setPlan(payload.plan);
       savePlan(payload.plan);
+      void safeSaveCloudState({ plan: payload.plan });
       setPlanError(null);
       setMealVideos({});
+
+      return payload.plan;
     } catch (error) {
       setPlan(null);
       setPlanError(error instanceof Error ? error.message : "Unable to generate an AI plan right now.");
+      return null;
     } finally {
       setIsGenerating(false);
     }
@@ -556,15 +291,12 @@ function App() {
     setActiveTab("week");
 
     try {
-      const startDate = getWeekStartDate();
       const response = await fetch(`${API_BASE_URL}/api/weekly-meal-plan`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile: nextProfile,
-          startDate
+          startDate: getWeekStartDate()
         })
       });
 
@@ -576,11 +308,15 @@ function App() {
 
       setWeekPlan(payload.weekPlan);
       saveWeekPlan(payload.weekPlan);
+      void safeSaveCloudState({ weekPlan: payload.weekPlan });
+
       const todaysPlan = payload.weekPlan.days.find((day) => day.date === todayDate) ?? null;
       if (todaysPlan) {
         setPlan(todaysPlan);
         savePlan(todaysPlan);
+        void safeSaveCloudState({ plan: todaysPlan });
       }
+
       setWeekError(null);
     } catch (error) {
       setWeekPlan(null);
@@ -610,890 +346,13 @@ function App() {
     setActiveTab("week");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/meal-plan`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          profile: updateDerivedTargets(profile),
-          date
-        })
-      });
-
-      const raw = await response.text();
-      const payload = raw ? (JSON.parse(raw) as { plan?: DailyMealPlan; error?: string }) : {};
-      if (!response.ok || !payload.plan) {
-        throw new Error(payload.error ?? "Unable to refresh this day right now.");
+      const refreshedPlan = await requestMealPlan(updateDerivedTargets(profile), date);
+      if (!refreshedPlan) {
+        throw new Error("Unable to refresh this day right now.");
       }
 
-      const updatedDays = weekPlan.days.map((day) => (day.date === date ? payload.plan! : day));
+      const updatedDays = weekPlan.days.map((day) => (day.date === date ? refreshedPlan : day));
       const nextWeekPlan = buildWeeklyPlanFromDays(weekPlan.startDate, updatedDays);
       setWeekPlan(nextWeekPlan);
       saveWeekPlan(nextWeekPlan);
-      if (date === todayDate) {
-        setPlan(payload.plan!);
-        savePlan(payload.plan!);
-      }
-    } catch (error) {
-      setWeekError(error instanceof Error ? error.message : "Unable to refresh this day right now.");
-    } finally {
-      setIsGeneratingWeek(false);
-    }
-  }
-
-  return (
-    <div className="app-shell">
-      <main className="dashboard">
-        <nav className="tabs" aria-label="Primary sections">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={activeTab === tab.id ? "tab-button active" : "tab-button"}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-
-        <section className={activeTab === "profile" ? "panel panel-form active-panel" : "panel panel-form hidden-panel"}>
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">{saved ? "Nutrition profile" : "Onboarding"}</p>
-              <h2>{saved && !editingProfile ? "Your current setup" : "Build your nutrition baseline"}</h2>
-            </div>
-            {saved && !editingProfile ? (
-              <button className="ghost-button" onClick={() => setEditingProfile(true)}>
-                Edit profile
-              </button>
-            ) : null}
-          </div>
-
-          {!saved || editingProfile ? (
-            <form
-              className="profile-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-              }}
-            >
-              <div className="section-block">
-                <p className="subheading">Calorie target helper</p>
-                <p className="helper-copy">
-                  Most people do not know their calorie number. These answers let the app estimate a better starting point.
-                </p>
-                <div className="macro-grid">
-                  <label>
-                    Sex
-                    <select
-                      value={profile.sex}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          sex: event.target.value as BiologicalSex
-                        }))
-                      }
-                    >
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                    </select>
-                  </label>
-                  <label>
-                    Age
-                    <input
-                      type="number"
-                      min={18}
-                      max={90}
-                      value={ageInput}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setAgeInput(nextValue);
-                        if (nextValue === "") {
-                          return;
-                        }
-
-                        setProfile((current) => ({
-                          ...current,
-                          age: Number(nextValue)
-                        }));
-                      }}
-                      onBlur={() => {
-                        if (ageInput !== "") {
-                          return;
-                        }
-
-                        setAgeInput(String(profile.age));
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Height (cm)
-                    <input
-                      type="number"
-                      min={120}
-                      max={230}
-                      value={heightInput}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setHeightInput(nextValue);
-                        if (nextValue === "") {
-                          return;
-                        }
-
-                        setProfile((current) => ({
-                          ...current,
-                          heightCm: Number(nextValue)
-                        }));
-                      }}
-                      onBlur={() => {
-                        if (heightInput !== "") {
-                          return;
-                        }
-
-                        setHeightInput(String(profile.heightCm));
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Weight (kg)
-                    <input
-                      type="number"
-                      min={35}
-                      max={250}
-                      step="0.1"
-                      value={weightInput}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setWeightInput(nextValue);
-                        if (nextValue === "") {
-                          return;
-                        }
-
-                        setProfile((current) => ({
-                          ...current,
-                          weightKg: Number(nextValue)
-                        }));
-                      }}
-                      onBlur={() => {
-                        if (weightInput !== "") {
-                          return;
-                        }
-
-                        setWeightInput(String(profile.weightKg));
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Activity
-                    <select
-                      value={profile.activityLevel}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          activityLevel: event.target.value as ActivityLevel
-                        }))
-                      }
-                    >
-                      <option value="sedentary">Mostly seated</option>
-                      <option value="light">Lightly active</option>
-                      <option value="moderate">Moderately active</option>
-                      <option value="active">Very active</option>
-                    </select>
-                  </label>
-                  <label>
-                    Goal
-                    <select
-                      value={profile.goal}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          goal: event.target.value as Goal
-                        }))
-                      }
-                    >
-                      <option value="lose">Lose fat</option>
-                      <option value="maintain">Maintain</option>
-                      <option value="gain">Gain muscle</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="calculator-card">
-                  <div>
-                    <span>Recommended starting target</span>
-                    <strong>{estimatedCalories} kcal/day</strong>
-                  </div>
-                  <button className="ghost-button" type="button" onClick={syncCalculatedCalories}>
-                    Use this target
-                  </button>
-                </div>
-              </div>
-
-              <div className="section-block">
-                <p className="subheading">Nutrition target</p>
-                <label>
-                  Daily calorie target
-                  <input
-                    type="number"
-                    min={1200}
-                    max={5000}
-                    value={profile.calorieTarget}
-                    onChange={(event) =>
-                      setProfile((current) => ({
-                        ...current,
-                        calorieTarget: Number(event.target.value || current.calorieTarget)
-                      }))
-                    }
-                  />
-                </label>
-
-                <label>
-                  Macro mode
-                  <select
-                    value={profile.macroMode}
-                    onChange={(event) =>
-                      setProfile((current) => ({
-                        ...current,
-                        macroMode: event.target.value as MacroMode
-                      }))
-                    }
-                  >
-                    <option value="split">Preset split</option>
-                    <option value="explicit">Explicit grams</option>
-                  </select>
-                </label>
-
-                {profile.macroMode === "split" ? (
-                  <label>
-                    Macro style
-                    <select
-                      value={profile.macroPreset}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          macroPreset: event.target.value as MacroPreset
-                        }))
-                      }
-                    >
-                      <option value="balanced">Balanced</option>
-                      <option value="high_protein">High protein</option>
-                      <option value="lower_carb">Lower carb</option>
-                    </select>
-                  </label>
-                ) : (
-                  <div className="macro-grid">
-                    <label>
-                      Protein (g)
-                      <input
-                        type="number"
-                        min={0}
-                        value={profile.macroTargets.protein}
-                        onChange={(event) =>
-                          setProfile((current) => ({
-                            ...current,
-                            macroTargets: {
-                              ...current.macroTargets,
-                              protein: Number(event.target.value || 0)
-                            }
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Carbs (g)
-                      <input
-                        type="number"
-                        min={0}
-                        value={profile.macroTargets.carbs}
-                        onChange={(event) =>
-                          setProfile((current) => ({
-                            ...current,
-                            macroTargets: {
-                              ...current.macroTargets,
-                              carbs: Number(event.target.value || 0)
-                            }
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Fat (g)
-                      <input
-                        type="number"
-                        min={0}
-                        value={profile.macroTargets.fat}
-                        onChange={(event) =>
-                          setProfile((current) => ({
-                            ...current,
-                            macroTargets: {
-                              ...current.macroTargets,
-                              fat: Number(event.target.value || 0)
-                            }
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-                )}
-              </div>
-
-              <div className="section-block">
-                <p className="subheading">Planning preferences</p>
-                <label>
-                  Dietary pattern
-                  <select
-                    value={profile.dietaryPattern}
-                    onChange={(event) =>
-                      setProfile((current) => ({
-                        ...current,
-                        dietaryPattern: event.target.value as DietaryPattern
-                      }))
-                    }
-                  >
-                    <option value="omnivore">Omnivore</option>
-                    <option value="vegetarian">Vegetarian</option>
-                    <option value="vegan">Vegan</option>
-                  </select>
-                </label>
-
-                <div>
-                  <span className="field-label">Exclusions</span>
-                  <div className="checkbox-grid">
-                    {exclusionOptions.map((option) => (
-                      <label key={option} className="check-pill">
-                        <input
-                          type="checkbox"
-                          checked={profile.exclusions.includes(option)}
-                          onChange={(event) =>
-                            setProfile((current) => ({
-                              ...current,
-                              exclusions: event.target.checked
-                                ? [...current.exclusions, option]
-                                : current.exclusions.filter((entry) => entry !== option)
-                            }))
-                          }
-                        />
-                        {option}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="split-fields">
-                  <label>
-                    Cuisine
-                    <select
-                      value={profile.cuisinePreference}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          cuisinePreference: event.target.value as CuisinePreference
-                        }))
-                      }
-                    >
-                      <option value="indian">Indian</option>
-                      <option value="mediterranean">Mediterranean</option>
-                      <option value="american">American</option>
-                      <option value="east_asian">East Asian</option>
-                    </select>
-                  </label>
-
-                  <label>
-                    Meals per day
-                    <select
-                      value={profile.mealsPerDay}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          mealsPerDay: Number(event.target.value) as 3 | 4
-                        }))
-                      }
-                    >
-                      <option value={3}>3 meals</option>
-                      <option value={4}>3 meals + snack</option>
-                    </select>
-                  </label>
-
-                  <label>
-                    Prep preference
-                    <select
-                      value={profile.prepPreference}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          prepPreference: event.target.value as PrepPreference
-                        }))
-                      }
-                    >
-                      <option value="low">Low effort</option>
-                      <option value="medium">Medium effort</option>
-                      <option value="high">High effort</option>
-                    </select>
-                  </label>
-                </div>
-
-                <label className="check-pill repeat-toggle">
-                  <input
-                    type="checkbox"
-                    checked={profile.allowRepeats}
-                    onChange={(event) =>
-                      setProfile((current) => ({
-                        ...current,
-                        allowRepeats: event.target.checked
-                      }))
-                    }
-                  />
-                  Repeat meals / leftovers are okay
-                </label>
-                <p className="helper-copy">
-                  Turn this on if you batch-cook and are happy to repeat a dinner the next day or reuse breakfast items.
-                </p>
-              </div>
-
-              <div className="macro-preview">
-                <span>Target preview</span>
-                <strong>
-                  {displayedTargets.protein}g protein / {displayedTargets.carbs}g carbs / {displayedTargets.fat}g fat
-                </strong>
-              </div>
-
-              <div className="action-stack">
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={handleBuildWeekOnly}
-                  disabled={isGeneratingWeek}
-                >
-                  {isGeneratingWeek
-                    ? "Generating weekly plan..."
-                    : saved
-                      ? "Save profile and build 7-day plan"
-                      : "Save profile and build 7-day plan"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="profile-summary">
-              <div className="stat-row">
-                <span>Calories</span>
-                <strong>{profile.calorieTarget}</strong>
-              </div>
-              <div className="stat-row">
-                <span>Estimated from</span>
-                <strong>
-                  {profile.age}y â€¢ {profile.heightCm}cm â€¢ {profile.weightKg}kg
-                </strong>
-              </div>
-              <div className="stat-row">
-                <span>Activity + goal</span>
-                <strong>
-                  {profile.activityLevel} â€¢ {profile.goal}
-                </strong>
-              </div>
-              <div className="stat-row">
-                <span>Macros</span>
-                <strong>
-                  {profile.macroTargets.protein}P / {profile.macroTargets.carbs}C / {profile.macroTargets.fat}F
-                </strong>
-              </div>
-              <div className="stat-row">
-                <span>Diet</span>
-                <strong>{profile.dietaryPattern}</strong>
-              </div>
-              <div className="stat-row">
-                <span>Cuisine</span>
-                <strong>{profile.cuisinePreference.replace("_", " ")}</strong>
-              </div>
-              <div className="stat-row">
-                <span>Meals</span>
-                <strong>{profile.mealsPerDay}</strong>
-              </div>
-              <div className="stat-row">
-                <span>Prep style</span>
-                <strong>{profile.prepPreference}</strong>
-              </div>
-              <div className="stat-row">
-                <span>Repeats</span>
-                <strong>{profile.allowRepeats ? "allowed" : "prefer variety"}</strong>
-              </div>
-              <div className="stat-row">
-                <span>Exclusions</span>
-                <strong>{profile.exclusions.length ? profile.exclusions.join(", ") : "none"}</strong>
-              </div>
-              <div className="action-stack">
-                <button className="ghost-button" onClick={regenerateWeekPlan} disabled={isGeneratingWeek}>
-                  {isGeneratingWeek ? "Generating weekly plan..." : "Build 7-day plan"}
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className={activeTab === "day" ? "panel panel-plan active-panel" : "panel panel-plan hidden-panel"}>
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">1-day plan</p>
-              <h2>Your nutrition day</h2>
-            </div>
-            {activeDayPlan ? <span className="date-chip">{activeDayPlan.date}</span> : null}
-          </div>
-
-          {planError ? <div className="empty-state error-state">{planError}</div> : null}
-
-          {isGenerating ? (
-            <div className="empty-state">
-              Building an AI-assisted plan that fits your calories, macros, cuisine, diet, and prep style.
-            </div>
-          ) : null}
-
-          {!activeDayPlan && !planError && !isGenerating ? (
-            <div className="empty-state">
-              Save your profile to generate an AI-assisted day plan with gram-based portions, reminders, and groceries.
-            </div>
-          ) : null}
-
-          {activeDayPlan && !isGenerating ? (
-            <>
-              <div className="totals-grid">
-                <div className="metric-card">
-                  <span>Calories</span>
-                  <strong>{activeDayPlan.totals.calories}</strong>
-                </div>
-                <div className="metric-card">
-                  <span>Protein</span>
-                  <strong>{activeDayPlan.totals.protein}g</strong>
-                </div>
-                <div className="metric-card">
-                  <span>Carbs</span>
-                  <strong>{activeDayPlan.totals.carbs}g</strong>
-                </div>
-                <div className="metric-card">
-                  <span>Fat</span>
-                  <strong>{activeDayPlan.totals.fat}g</strong>
-                </div>
-              </div>
-
-              <p className="planner-note">{activeDayPlan.note}</p>
-
-              <div className="meal-list">
-                {activeDayPlan.meals.map((meal) => (
-                  <details key={meal.id} className={`meal-card ${mealColorClass[meal.mealType]}`} open={meal.mealType === "breakfast"}>
-                    <summary className="meal-summary">
-                      <div className="meal-summary-copy">
-                        <p className="meal-type">{meal.mealType}</p>
-                        <h3>{meal.name}</h3>
-                        <p>{meal.description}</p>
-                      </div>
-                      <div className="macro-badge">
-                        <span>{meal.totalCalories} kcal</span>
-                        <strong>
-                          {meal.totalProtein}P / {meal.totalCarbs}C / {meal.totalFat}F
-                        </strong>
-                      </div>
-                    </summary>
-
-                    <div className="meal-details">
-                      {(() => {
-                        const portionSummary = getMealPortionSummary(meal.ingredients);
-
-                        return (
-                          <div className="portion-box">
-                            <span>How much to eat</span>
-                            <strong>About {portionSummary.totalQuantity}g total</strong>
-                            <p className="portion-copy">
-                              {portionSummary.mainIngredients.length
-                                ? portionSummary.mainIngredients
-                                    .map(
-                                      (ingredient) =>
-                                        `${Math.round(ingredient.quantity)}g ${ingredient.shortName}`
-                                    )
-                                    .join(" + ")
-                                : "Use the ingredient breakdown below for the full portion."}
-                            </p>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="video-card">
-                        <span>Top recipe video</span>
-                        {mealVideos[meal.id] ? (
-                          <a
-                            className="video-link"
-                            href={mealVideos[meal.id]!.url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {mealVideos[meal.id]!.thumbnailUrl ? (
-                              <img
-                                className="video-thumb"
-                                src={mealVideos[meal.id]!.thumbnailUrl}
-                                alt={mealVideos[meal.id]!.title}
-                              />
-                            ) : null}
-                            <div className="video-copy">
-                              <strong>{mealVideos[meal.id]!.title}</strong>
-                              <p>
-                                {mealVideos[meal.id]!.channelName}
-                                {mealVideos[meal.id]!.duration ? ` â€¢ ${mealVideos[meal.id]!.duration}` : ""}
-                              </p>
-                            </div>
-                          </a>
-                        ) : (
-                          <p className="portion-copy">Finding the best recipe video for this meal...</p>
-                        )}
-                      </div>
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </>
-          ) : null}
-        </section>
-
-        <section className={activeTab === "week" ? "panel panel-week active-panel" : "panel panel-week hidden-panel"}>
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">7-day plan</p>
-              <h2>Your weekly structure</h2>
-            </div>
-            <button className="ghost-button" onClick={regenerateWeekPlan} disabled={isGeneratingWeek}>
-              {isGeneratingWeek ? "Building week..." : "Regenerate week"}
-            </button>
-          </div>
-
-          {weekError ? <div className="empty-state error-state">{weekError}</div> : null}
-
-          {isGeneratingWeek ? (
-            <div className="empty-state">
-              Building your 7-day plan. Weekly plans take longer because the app generates each day with variety in mind.
-            </div>
-          ) : null}
-
-          {!weekPlan && !weekError && !isGeneratingWeek ? (
-            <div className="empty-state">
-              Build a weekly plan to see 7 days of meals, one combined grocery list, and lighter repetition across the week.
-            </div>
-          ) : null}
-
-          {weekPlan && !isGeneratingWeek ? (
-            <>
-              <p className="planner-note">{weekPlan.note}</p>
-
-              <div className="week-list">
-                {weekPlan.days.map((day) => (
-                  <details key={day.date} className="week-day-card" open={day.date === weekPlan.startDate}>
-                    <summary className="week-day-summary">
-                      <div>
-                        <p className="section-kicker">Day</p>
-                        <h3>{formatDisplayDate(day.date)}</h3>
-                        <p className="portion-copy">
-                          {day.meals.map((meal) => meal.name).join(" â€¢ ")}
-                        </p>
-                      </div>
-                      <div className="week-day-meta">
-                        <strong>{day.totals.calories} kcal</strong>
-                        <span>
-                          {day.totals.protein}P / {day.totals.carbs}C / {day.totals.fat}F
-                        </span>
-                      </div>
-                    </summary>
-
-                    <div className="week-day-actions">
-                      <button className="ghost-button" onClick={() => regenerateWeekDay(day.date)} disabled={isGeneratingWeek}>
-                        Refresh this day
-                      </button>
-                    </div>
-
-                    <div className="week-meal-grid">
-                      {day.meals.map((meal) => {
-                        const portionSummary = getMealPortionSummary(meal.ingredients);
-                        return (
-                          <article key={meal.id} className={`mini-meal-card ${mealColorClass[meal.mealType]}`}>
-                            <p className="meal-type">{meal.mealType}</p>
-                            <h4>{meal.name}</h4>
-                            <p className="portion-copy">About {portionSummary.totalQuantity}g total</p>
-                            <p className="portion-copy">
-                              {portionSummary.mainIngredients.length
-                                ? portionSummary.mainIngredients
-                                    .map((ingredient) => `${Math.round(ingredient.quantity)}g ${ingredient.shortName}`)
-                                    .join(" + ")
-                                : `${meal.totalCalories} kcal`}
-                            </p>
-                            <div className="video-card mini-video-card">
-                              <span>Top recipe video</span>
-                              {mealVideos[meal.id] ? (
-                                <a
-                                  className="video-link"
-                                  href={mealVideos[meal.id]!.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {mealVideos[meal.id]!.thumbnailUrl ? (
-                                    <img
-                                      className="video-thumb"
-                                      src={mealVideos[meal.id]!.thumbnailUrl}
-                                      alt={mealVideos[meal.id]!.title}
-                                    />
-                                  ) : null}
-                                  <div className="video-copy">
-                                    <strong>{mealVideos[meal.id]!.title}</strong>
-                                    <p>
-                                      {mealVideos[meal.id]!.channelName}
-                                      {mealVideos[meal.id]!.duration ? ` â€¢ ${mealVideos[meal.id]!.duration}` : ""}
-                                    </p>
-                                  </div>
-                                </a>
-                              ) : (
-                                <p className="portion-copy">Finding the best recipe video for this meal...</p>
-                              )}
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </>
-          ) : null}
-        </section>
-
-        <section className={activeTab === "reminders" ? "panel active-panel" : "panel hidden-panel"}>
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">Reminder flow</p>
-              <h2>Soak reminders</h2>
-            </div>
-          </div>
-
-          {groupedReminders.length ? (
-            <div className="reminder-list">
-              {groupedReminders.map((group) => (
-                <details
-                  key={group.date}
-                  className="reminder-day-card"
-                  open={group.date === new Date().toISOString().slice(0, 10)}
-                >
-                  <summary className="reminder-day-summary">
-                    <div>
-                      <p className="section-kicker">Soak day</p>
-                      <h3>{formatDisplayDate(group.date)}</h3>
-                    </div>
-                    <div className="week-day-meta">
-                      <strong>{group.items.length} item{group.items.length > 1 ? "s" : ""}</strong>
-                    </div>
-                  </summary>
-
-                  <div className="reminder-group-list">
-                    {group.items.map((reminder) => (
-                      <article key={reminder.id} className={`reminder-card ${reminder.type}`}>
-                        <span className="reminder-tag">{reminder.type}</span>
-                        <h3>{reminder.title}</h3>
-                        <p>
-                          For {formatDisplayDate(reminder.targetDate)} {reminder.linkedMealName}
-                          {reminder.linkedIngredientName ? ` â€¢ ${reminder.linkedIngredientName}` : ""}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                </details>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">Only meals that truly need overnight soaking will appear here.</div>
-          )}
-        </section>
-
-        <section className={activeTab === "groceries" ? "panel active-panel" : "panel hidden-panel"}>
-          <div className="panel-heading">
-            <div>
-              <p className="section-kicker">Shopping</p>
-              <h2>{weekPlan ? "Weekly grocery list" : "Grocery list"}</h2>
-            </div>
-            {displayedGroceries.length ? (
-              <button className="ghost-button" type="button" onClick={clearCheckedGroceries}>
-                Reset checks
-              </button>
-            ) : null}
-          </div>
-
-          {displayedGroceries.length ? (
-            <>
-              <p className="planner-note">
-                {weekPlan
-                  ? "Everything you need for your current 7-day plan, grouped for an easier shop."
-                  : "Your current grocery list, grouped for an easier shop."}
-              </p>
-
-              {groupedGroceries.fruits.length ? (
-                <div className="section-block grocery-section grocery-section-fruits">
-                  <p className="subheading">Fruits</p>
-                  <ul className="grocery-list weekly-grocery-list">
-                    {groupedGroceries.fruits.map((item) => (
-                      <li key={item.ingredientId}>
-                        <label className={checkedGroceries.includes(item.ingredientId) ? "grocery-check checked" : "grocery-check"}>
-                          <input
-                            type="checkbox"
-                            checked={checkedGroceries.includes(item.ingredientId)}
-                            onChange={() => toggleGroceryItem(item.ingredientId)}
-                          />
-                          <span>{item.ingredientName}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {groupedGroceries.vegetables.length ? (
-                <div className="section-block grocery-section grocery-section-vegetables">
-                  <p className="subheading">Vegetables</p>
-                  <ul className="grocery-list weekly-grocery-list">
-                    {groupedGroceries.vegetables.map((item) => (
-                      <li key={item.ingredientId}>
-                        <label className={checkedGroceries.includes(item.ingredientId) ? "grocery-check checked" : "grocery-check"}>
-                          <input
-                            type="checkbox"
-                            checked={checkedGroceries.includes(item.ingredientId)}
-                            onChange={() => toggleGroceryItem(item.ingredientId)}
-                          />
-                          <span>{item.ingredientName}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {groupedGroceries.dry_items.length ? (
-                <div className="section-block grocery-section grocery-section-dry">
-                  <p className="subheading">Dry items</p>
-                  <ul className="grocery-list weekly-grocery-list">
-                    {groupedGroceries.dry_items.map((item) => (
-                      <li key={item.ingredientId}>
-                        <label className={checkedGroceries.includes(item.ingredientId) ? "grocery-check checked" : "grocery-check"}>
-                          <input
-                            type="checkbox"
-                            checked={checkedGroceries.includes(item.ingredientId)}
-                            onChange={() => toggleGroceryItem(item.ingredientId)}
-                          />
-                          <span>{item.ingredientName}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="empty-state">
-              Generate a day or week plan and your grocery list will appear here.
-            </div>
-          )}
-        </section>
-      </main>
-    </div>
-  );
-}
-
-export default App;
+      void safeSaveCloudState({ weekPlan: nextWeekPlam¸ô¤ì((€€€€€¥˜€¡‘…Ñ”€ôôôÑ½‘…å…Ñ”¤ì(€€€€€€€Í•ÑA±…¸¡É•™É•Í¡•‘A±…¸¤ì(€€€€€€€Í…Ù•A±…¸¡É•™É•Í¡•‘A±…¸¤ì(€€€€€€€Ù½¥Í…™•M…Ù•±½Õ‘MÑ…Ñ”¡ìÁ±…¸èÉ•™É•Í¡•‘A±…¸ô¤ì(€€€€€ô(€€€ô…Ñ €¡•ÉÉ½È¤ì(€€€€€Í•Ñ]••­ÉÉ½È¡•ÉÉ½È¥¹ÍÑ…¹•½˜É½È€ü•ÉÉ½È¹µ•ÍÍ…”€è€‰U¹…‰±”Ñ¼É•™É•Í Ñ¡¥Ì‘…äÉ¥¡Ğ¹½Ü¸ˆ¤ì(€€€ô™¥¹…±±äì(€€€€€Í•Ñ%Í•¹•É…Ñ¥¹]••¬¡™…±Í”¤ì(€€€ô(€ô((€…Íå¹Œ™Õ¹Ñ¥½¸¡…¹‘±•M¥¹=ÕĞ ¤ì(€€€¥˜€ ……ÕÑ ¤ì(€€€€€É•ÑÕÉ¸ì(€€€ô((€€€…İ…¥ĞÍ¥¹=ÕĞ¡…ÕÑ ¤ì(€€€Í•ÑÕÑ¡UÍ•È¡¹Õ±°¤ì(€€€Í•ÑÕÑ¡I•…‘ä¡ÑÉÕ”¤ì(€ô((€¥˜€ ……ÕÑ¡I•…‘äñğ±½Õ‘1½…‘¥¹œ¤ì(€€€É•ÑÕÉ¸€ (€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÕÑ µÍ¡•±°ˆø(€€€€€€€€ñÍ•Ñ¥½¸±…ÍÍ9…µ”ô‰…ÕÑ µ…Éˆø(€€€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Í•Ñ¥½¸µ­¥­•ÈˆùA•ÉÍ½¹…°½½=Lğ½Àø(€€€€€€€€€€ñ Äù1½…‘¥¹œå½ÕÈ™½½ÍåÍÑ•´ğ½ Äø(€€€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰¡•±Á•Èµ½ÁäˆùAÕ±±¥¹œ¥¸å½ÕÈÍ…Ù•ÁÉ½™¥±”…¹±…Ñ•ÍĞÁ±…¹Ì¸ğ½Àø(€€€€€€€€ğ½Í•Ñ¥½¸ø(€€€€€€ğ½‘¥Øø(€€€€¤ì(€ô((€¥˜€¡¥Í¥É•‰…Í•½¹™¥ÕÉ•€˜˜€……ÕÑ¡UÍ•È¤ì(€€€É•ÑÕÉ¸€ñÕÑ¡MÉ••¸½¹M¥¹•‘%¸õíÍ•ÑÕÑ¡UÍ•Éô€¼øì(€ô((€½¹ÍĞ…½Õ¹Ñ1…‰•°€ô¥Í¥É•‰…Í•½¹™¥ÕÉ•(€€€€ü…ÕÑ¡UÍ•Èü¹•µ…¥°€üü…ÕÑ¡UÍ•Èü¹‘¥ÍÁ±…å9…µ”€üü€‰M¥¹•¥¸ˆ(€€€€è€‰1½…°µ½‘”ˆì(€½¹ÍĞÕÍ•É%¹¥Ñ¥…°€ô€¡…ÕÑ¡UÍ•Èü¹‘¥ÍÁ±…å9…µ”€üü…ÕÑ¡UÍ•Èü¹•µ…¥°€üü€‰Tˆ¤¹ÑÉ¥´ ¤¹¡…ÉĞ À¤¹Ñ½UÁÁ•É…Í” ¤ì((€É•ÑÕÉ¸€ (€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÁÀµÍ¡•±°ˆø(€€€€€€ñµ…¥¸±…ÍÍ9…µ”ô‰‘…Í¡‰½…Éˆø(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÁÀµ¡•…‘•Èˆø(€€€€€€€€€€ñQ…‰Í9…Ø…Ñ¥Ù•Q…ˆõí…Ñ¥Ù•Q…‰ô½¹¡…¹”õíÍ•ÑÑ¥Ù•Q…‰ôÍ¡½İAÉ½™¥±•Q…ˆõíÍ¡½İAÉ½™¥±•Q…ˆ€¼ø((€€€€€€€€€€í…ÕÑ¡UÍ•È€ü€¡q¸€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰ÕÍ•Èµµ•¹Ôˆø(€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸(€€€€€€€€€€€€€€€ÑåÁ”ô‰‰ÕÑÑ½¸ˆ(€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰ÕÍ•Èµµ•¹ÔµÑÉ¥•Èˆ(€€€€€€€€€€€€€€€½¹±¥¬õì ¤€ôøÍ•ÑUÍ•É5•¹Õ=Á•¸ ¡ÕÉÉ•¹Ğ¤€ôø€…ÕÉÉ•¹Ğ¥ô(€€€€€€€€€€€€€€€…É¥„µ•áÁ…¹‘•õíÕÍ•É5•¹Õ=Á•¹ô(€€€€€€€€€€€€€€€…É¥„µ¡…ÍÁ½ÁÕÀô‰µ•¹Ôˆ(€€€€€€€€€€€€€€ø(€€€€€€€€€€€€€€€í…ÕÑ¡UÍ•È¹Á¡½Ñ½UI0€ü€ (€€€€€€€€€€€€€€€€€€ñ¥µœ±…ÍÍ9…µ”ô‰ÕÍ•Èµ…Ù…Ñ…ÈˆÍÉŒõí…ÕÑ¡UÍ•È¹Á¡½Ñ½UI1ô…±Ğõí…½Õ¹Ñ1…‰•±ô€¼ø(€€€€€€€€€€€€€€€€¤€è€ (€€€€€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÍ9…µ”ô‰ÕÍ•Èµ…Ù…Ñ…ÈÕÍ•Èµ…Ù…Ñ…Èµ™…±±‰…¬ˆùíÕÍ•É%¹¥Ñ¥…±ôğ½ÍÁ…¸ø(€€€€€€€€€€€€€€€€¥ô(€€€€€€€€€€€€€€ğ½‰ÕÑÑ½¸ø((€€€€€€€€€€€€€íÕÍ•É5•¹Õ=Á•¸€ü€ (€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰ÕÍ•Èµµ•¹ÔµÁ½Á½Ù•ÈˆÉ½±”ô‰µ•¹Ôˆø(€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰ÕÍ•Èµµ•¹ÔµÍÕµµ…Éäˆø(€€€€€€€€€€€€€€€€€€€í…ÕÑ¡UÍ•È¹Á¡½Ñ½UI0€ü€ (€€€€€€€€€€€€€€€€€€€€€€ñ¥µœ±…ÍÍ9…µ”ô‰ÕÍ•Èµ…Ù…Ñ…ÈˆÍÉŒõí…ÕÑ¡UÍ•È¹Á¡½Ñ½UI1ô…±Ğõí…½Õ¹Ñ1…‰•±ô€¼ø(€€€€€€€€€€€€€€€€€€€€¤€è€ (€€€€€€€€€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÍ9…µ”ô‰ÕÍ•Èµ…Ù…Ñ…ÈÕÍ•Èµ…Ù…Ñ…Èµ™…±±‰…¬ˆùíÕÍ•É%¹¥Ñ¥…±ôğ½ÍÁ…¸ø(€€€€€€€€€€€€€€€€€€€€¥ô(€€€€€€€€€€€€€€€€€€€€ñ‘¥Øø(€€€€€€€€€€€€€€€€€€€€€€ñÍÑÉ½¹œùí…ÕÑ¡UÍ•È¹‘¥ÍÁ±…å9…µ”€üü€‰e½ÕÈ…½Õ¹Ğ‰ôğ½ÍÑÉ½¹œø(€€€€€€€€€€€€€€€€€€€€€€ñÀùí…½Õ¹Ñ1…‰•±ôğ½Àø(€€€€€€€€€€€€€€€€€€€€ğ½‘¥Øø(€€€€€€€€€€€€€€€€€€ğ½‘¥Øø(€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸(€€€€€€€€€€€€€€€€€€€ÑåÁ”ô‰‰ÕÑÑ½¸ˆ(€€€€€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰ÕÍ•Èµµ•¹Ôµ¥Ñ•´ˆ(€€€€€€€€€€€€€€€€€€€½¹±¥¬õì ¤€ôøì(€€€€€€€€€€€€€€€€€€€€€Í•ÑÑ¥Ù•Q…ˆ ‰ÁÉ½™¥±”ˆ¤ì(€€€€€€€€€€€€€€€€€€€€€Í•Ñ‘¥Ñ¥¹AÉ½™¥±”¡ÑÉÕ”¤ì(€€€€€€€€€€€€€€€€€€€€€Í•ÑUÍ•É5•¹Õ=Á•¸¡™…±Í”¤ì(€€€€€€€€€€€€€€€€€€€õô(€€€€€€€€€€€€€€€€€€ø(€€€€€€€€€€€€€€€€€€€‘¥ĞÁÉ•™•É•¹•Ì(€€€€€€€€€€€€€€€€€€ğ½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸(€€€€€€€€€€€€€€€€€€€ÑåÁ”ô‰‰ÕÑÑ½¸ˆ(€€€€€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰ÕÍ•Èµµ•¹Ôµ¥Ñ•´ˆ(€€€€€€€€€€€€€€€€€€€½¹±¥¬õì ¤€ôøì(€€€€€€€€€€€€€€€€€€€€€Í•ÑUÍ•É5•¹Õ=Á•¸¡™…±Í”¤ì(€€€€€€€€€€€€€€€€€€€€€Ù½¥¡…¹‘±•M¥¹=ÕĞ ¤ì(€€€€€€€€€€€€€€€€€€€õô(€€€€€€€€€€€€€€€€€€ø(€€€€€€€€€€€€€€€€€€€M¥¸½ÕĞ(€€€€€€€€€€€€€€€€€€ğ½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€ğ½‘¥Øø(€€€€€€€€€€€€€€¤€è¹Õ±±ô(€€€€€€€€€€€€ğ½‘¥Øø(€€€€€€€€€€¤€è¹Õ±±ô(€€€€€€€€ğ½‘¥Øø((€€€€€€€í…Ñ¥Ù•Q…ˆ€ôôô€‰ÁÉ½™¥±”ˆ€ü€ (€€€€€€€€€€ñAÉ½™¥±•A…¹•°(€€€€€€€€€€€Í…Ù•õíÍ…Ù•‘ô(€€€€€€€€€€€•‘¥Ñ¥¹AÉ½™¥±”õí•‘¥Ñ¥¹AÉ½™¥±•ô(€€€€€€€€€€€ÁÉ½™¥±”õíÁÉ½™¥±•ô(€€€€€€€€€€€•á±ÕÍ¥½¹=ÁÑ¥½¹Ìõí•á±ÕÍ¥½¹=ÁÑ¥½¹Íô(€€€€€€€€€€€•ÍÑ¥µ…Ñ•‘…±½É¥•Ìõí•ÍÑ¥µ…Ñ•‘…±½É¥•Íô(€€€€€€€€€€€‘¥ÍÁ±…å•‘Q…É•ÑÌõí‘¥ÍÁ±…å•‘Q…É•ÑÍô(€€€€€€€€€€€…•%¹ÁÕĞõí…•%¹ÁÕÑô(€€€€€€€€€€€¡•¥¡Ñ%¹ÁÕĞõí¡•¥¡Ñ%¹ÁÕÑô(€€€€€€€€€€€İ•¥¡Ñ%¹ÁÕĞõíİ•¥¡Ñ%¹ÁÕÑô(€€€€€€€€€€€¥Í•¹•É…Ñ¥¹]••¬õí¥Í•¹•É…Ñ¥¹]••­ô(€€€€€€€€€€€½¹Må¹…±Õ±…Ñ•‘…±½É¥•ÌõíÍå¹…±Õ±…Ñ•‘…±½É¥•Íô(€€€€€€€€€€€½¹•%¹ÁÕÑ¡…¹”õì¡Ù…±Õ”¤€ôøì(€€€€€€€€€€€€€Í•Ñ•%¹ÁÕĞ¡Ù…±Õ”¤ì(€€€€€€€€€€€€€¥˜€¡Ù…±Õ”€„ôô€ˆˆ¤ì(€€€€€€€€€€€€€€€Í•ÑAÉ½™¥±” ¡ÕÉÉ•¹Ğ¤€ôø€¡ì€¸¸¹ÕÉÉ•¹Ğ°…”è9Õµ‰•È¡Ù…±Õ”¤ô¤¤ì(€€€€€€€€€€€€€ô(€€€€€€€€€€€õô(€€€€€€€€€€€½¹•%¹ÁÕÑ	±ÕÈõì ¤€ôøì(€€€€€€€€€€€€€¥˜€¡…•%¹ÁÕĞ€ôôô€ˆˆ¤ì(€€€€€€€€€€€€€€€Í•Ñ•%¹ÁÕĞ¡MÑÉ¥¹œ¡ÁÉ½™¥±”¹…”¤¤ì(€€€€€€€€€€€€€ô(€€€€€€€€€€€õô(€€€€€€€€€€€½¹!•¥¡Ñ%¹ÁÕÑ¡…¹”õì¡Ù…±Õ”¤€ôøì(€€€€€€€€€€€€€Í•Ñ!•¥¡Ñ%¹ÁÕĞ¡Ù…±Õ”¤ì(€€€€€€€€€€€€€¥˜€¡Ù…±Õ”€„ôô€ˆˆ¤ì(€€€€€€€€€€€€€€€Í•ÑAÉ½™¥±” ¡ÕÉÉ•¹Ğ¤€ôø€¡ì€¸¸¹ÕÉÉ•¹Ğ°¡•¥¡Ñ´è9Õµ‰•È¡Ù…±Õ”¤ô¤¤ì(€€€€€€€€€€€€€ô(€€€€€€€€€€€õô(€€€€€€€€€€€½¹!•¥¡Ñ%¹ÁÕÑ	±ÕÈõì ¤€ôøì(€€€€€€€€€€€€€¥˜€¡¡•¥¡Ñ%¹ÁÕĞ€ôôô€ˆˆ¤ì(€€€€€€€€€€€€€€€Í•Ñ!•¥¡Ñ%¹ÁÕĞ¡MÑÉ¥¹œ¡ÁÉ½™¥±”¹¡•¥¡Ñ´¤¤ì(€€€€€€€€€€€€€ô(€€€€€€€€€€€õô(€€€€€€€€€€€½¹]•¥¡Ñ%¹ÁÕÑ¡…¹”õì¡Ù…±Õ”¤€ôøì(€€€€€€€€€€€€€Í•Ñ]•¥¡Ñ%¹ÁÕĞ¡Ù…±Õ”¤ì(€€€€€€€€€€€€€¥˜€¡Ù…±Õ”€„ôô€ˆˆ¤ì(€€€€€€€€€€€€€€€Í•ÑAÉ½™¥±” ¡ÕÉÉ•¹Ğ¤€ôø€¡ì€¸¸¹ÕÉÉ•¹Ğ°İ•¥¡Ñ-œè9Õµ‰•È¡Ù…±Õ”¤ô¤¤ì(€€€€€€€€€€€€€ô(€€€€€€€€€€€õô(€€€€€€€€€€€½¹]•¥¡Ñ%¹ÁÕÑ	±ÕÈõì ¤€ôøì(€€€€€€€€€€€€€¥˜€¡İ•¥¡Ñ%¹ÁÕĞ€ôôô€ˆˆ¤ì(€€€€€€€€€€€€€€€Í•Ñ]•¥¡Ñ%¹ÁÕĞ¡MÑÉ¥¹œ¡ÁÉ½™¥±”¹İ•¥¡Ñ-œ¤¤ì(€€€€€€€€€€€€€ô(€€€€€€€€€€€õô(€€€€€€€€€€€½¹AÉ½™¥±•¡…¹”õíÕÁ‘…Ñ•AÉ½™¥±•ô(€€€€€€€€€€€½¹	Õ¥±‘]••¬õíÍ…Ù•€˜˜€…•‘¥Ñ¥¹AÉ½™¥±”€üÉ••¹•É…Ñ•]••­A±…¸€è¡…¹‘±•	Õ¥±‘]••­=¹±åô(€€€€€€€€€€¼ø(€€€€€€€€¤€è¹Õ±±ô((€€€€€€€í…Ñ¥Ù•Q…ˆ€ôôô€‰‘…äˆ€ü€ (€€€€€€€€€€ñ…åA…¹•°Á±…¸õí…Ñ¥Ù•…åA±…¹ôÁ±…¹ÉÉ½ÈõíÁ±…¹ÉÉ½Éô¥Í•¹•É…Ñ¥¹œõí¥Í•¹•É…Ñ¥¹ôµ•…±Y¥‘•½Ìõíµ•…±Y¥‘•½Íô€¼ø(€€€€€€€€¤€è¹Õ±±ô((€€€€€€€í…Ñ¥Ù•Q…ˆ€ôôô€‰İ••¬ˆ€ü€ (€€€€€€€€€€ñ]••­A…¹•°(€€€€€€€€€€€İ••­A±…¸õíİ••­A±…¹ô(€€€€€€€€€€€İ••­ÉÉ½Èõíİ••­ÉÉ½Éô(€€€€€€€€€€€¥Í•¹•É…Ñ¥¹]••¬õí¥Í•¹•É…Ñ¥¹]••­ô(€€€€€€€€€€€µ•…±Y¥‘•½Ìõíµ•…±Y¥‘•½Íô(€€€€€€€€€€€½¹I••¹•É…Ñ•]••¬õíÉ••¹•É…Ñ•]••­A±…¹ô(€€€€€€€€€€€½¹I••¹•É…Ñ•…äõíÉ••¹•É…Ñ•]••­…åô(€€€€€€€€€€¼ø(€€€€€€€€¤€è¹Õ±±ô((€€€€€€€í…Ñ¥Ù•Q…ˆ€ôôô€‰™…µ¥±äˆ€ü€ (€€€€€€€€€€ñÍ•Ñ¥½¸±…ÍÍ9…µ”ô‰Á…¹•°…Ñ¥Ù”µÁ…¹•°ˆø(€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Á…¹•°µ¡•…‘¥¹œˆø(€€€€€€€€€€€€€€ñ‘¥Øø(€€€€€€€€€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Í•Ñ¥½¸µ­¥­•Èˆù…µ¥±äÁ±…¹¹¥¹œğ½Àø(€€€€€€€€€€€€€€€€ñ Èù½µ¥¹œÍ½½¸ğ½ Èø(€€€€€€€€€€€€€€ğ½‘¥Øø(€€€€€€€€€€€€ğ½‘¥Øø((€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰•µÁÑäµÍÑ…Ñ”ˆø(€€€€€€€€€€€€€…µ¥±äÁÉ½™¥±•Ì°Í¡…É•Á±…¹¹¥¹œ°…¹¡½ÕÍ•¡½±µ™É¥•¹‘±äµ•…°½½É‘¥¹…Ñ¥½¸…É”½µ¥¹œÍ½½¸¸(€€€€€€€€€€€€ğ½‘¥Øø(€€€€€€€€€€ğ½Í•Ñ¥½¸ø(€€€€€€€€¤€è¹Õ±±ô((€€€€€€€í…Ñ¥Ù•Q…ˆ€ôôô€‰É•µ¥¹‘•ÉÌˆ€ü€ñI•µ¥¹‘•ÉÍA…¹•°É½ÕÁ•‘I•µ¥¹‘•ÉÌõíÉ½ÕÁ•‘I•µ¥¹‘•ÉÍô€¼ø€è¹Õ±±ô((€€€€€€€í…Ñ¥Ù•Q…ˆ€ôôô€‰É½•É¥•Ìˆ€ü€ (€€€€€€€€€€ñÉ½•É¥•ÍA…¹•°(€€€€€€€€€€€İ••­5½‘”õí	½½±•…¸¡İ••­A±…¸¥ô(€€€€€€€€€€€¡…ÍÉ½•É¥•Ìõí‘¥ÍÁ±…å•‘É½•É¥•Ì¹±•¹Ñ €ø€Áô(€€€€€€€€€€€É½ÕÁ•‘É½•É¥•ÌõíÉ½ÕÁ•‘É½•É¥•Íô(€€€€€€€€€€€¡•­•‘É½•É¥•Ìõí¡•­•‘É½•É¥•Íô(€€€€€€€€€€€½¹Q½±•%Ñ•´õì¡¥Ñ•µ%¤€ôø(€€€€€€€€€€€€€Í•Ñ¡•­•‘É½•É¥•Ì ¡ÕÉÉ•¹Ğ¤€ôø(€€€€€€€€€€€€€€€ÕÉÉ•¹Ğ¹¥¹±Õ‘•Ì¡¥Ñ•µ%¤€üÕÉÉ•¹Ğ¹™¥±Ñ•È ¡•¹ÑÉä¤€ôø•¹ÑÉä€„ôô¥Ñ•µ%¤€èl¸¸¹ÕÉÉ•¹Ğ°¥Ñ•µ%‘t(€€€€€€€€€€€€€€¤(€€€€€€€€€€€ô(€€€€€€€€€€€½¹I•Í•Ñ¡•­Ìõì ¤€ôøÍ•Ñ¡•­•‘É½•É¥•Ì¡mt¥ô(€€€€€€€€€€¼ø(€€€€€€€€¤€è¹Õ±±ô(€€€€€€ğ½µ…¥¸ø(€€€€ğ½‘¥Øø(€€¤ì)ô()•áÁ½ÉĞ‘•™…Õ±ĞÁÀì(

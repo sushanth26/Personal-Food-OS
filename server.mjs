@@ -163,6 +163,10 @@ function buildPrompt(profile, date, options = {}) {
     options.avoidMeals?.length
       ? `- Avoid repeating these recent meal names if possible: ${options.avoidMeals.join(", ")}.`
       : "";
+  const avoidSnackInstruction =
+    profile.mealsPerDay === 4 && options.avoidSnacks?.length
+      ? `- Do not reuse these recent snack names unless there is no practical alternative: ${options.avoidSnacks.join(", ")}.`
+      : "";
   const repeatMealsInstruction =
     profile.allowRepeats && options.repeatFromMeals?.length
       ? `- Repeating or lightly adapting these recent meals is okay for batch cooking or leftovers: ${options.repeatFromMeals.join(", ")}.`
@@ -191,8 +195,10 @@ Requirements:
 - Prefer common dishes over creative variations.
  - ${repeatMealsInstruction}
  ${avoidMealsInstruction}
+ ${avoidSnackInstruction}
 - All ingredient amounts must be in grams.
 - Do not include explanations outside the meal fields.
+- If a snack is included, rotate snacks across the week. Snacks should be the least repeated meal slot.
 - Return valid JSON only.
 `.trim();
 }
@@ -405,14 +411,19 @@ app.post("/api/weekly-meal-plan", async (req, res) => {
 
     const days = [];
     const recentMealNames = [];
+    const recentSnackNames = [];
     for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
       const date = addDays(startDate, dayIndex);
       const dayPlan = await generateDailyPlan(profile, date, {
         avoidMeals: profile.allowRepeats ? [] : recentMealNames.slice(-6),
-        repeatFromMeals: profile.allowRepeats ? recentMealNames.slice(-3) : []
+        repeatFromMeals: profile.allowRepeats ? recentMealNames.slice(-3) : [],
+        avoidSnacks: recentSnackNames.slice(-4)
       });
       days.push(dayPlan);
       recentMealNames.push(...dayPlan.meals.map((meal) => meal.name));
+      recentSnackNames.push(
+        ...dayPlan.meals.filter((meal) => meal.mealType === "snack").map((meal) => meal.name)
+      );
     }
 
     return res.json({ weekPlan: buildWeeklyPlan(days) });
@@ -438,7 +449,7 @@ app.get("/api/recipe-video", async (req, res) => {
     const results = await ytsr(`${query} recipe`, { limit: 10 });
     const video = results.items.find((item) => item.type === "video");
 
-    if (!video || !('url' in video)) {
+    if (!video || !("url" in video)) {
       return res.status(404).json({ error: "No recipe video found." });
     }
 

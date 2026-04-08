@@ -14,9 +14,12 @@
   },
   "dependencies": {
     "express": "^4.21.2",
+    "firebase": "^12.11.0",
+    "firebaseui": "^6.1.0",
     "openai": "^4.104.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-firebaseui": "^6.0.0",
     "ytsr": "^3.8.4",
     "zod": "^3.24.1"
   },
