@@ -4,6 +4,7 @@ const PROFILE_KEY = "personal-food-os.profile";
 const PLAN_KEY = "personal-food-os.plan";
 const WEEK_PLAN_KEY = "personal-food-os.week-plan";
 const GROCERY_CHECKED_KEY = "personal-food-os.grocery-checked";
+const STORAGE_KEYS = [PROFILE_KEY, PLAN_KEY, WEEK_PLAN_KEY, GROCERY_CHECKED_KEY];
 
 function safeParse<T>(raw: string | null): T | null {
   if (!raw) {
@@ -47,4 +48,11 @@ export function loadCheckedGroceries(): string[] {
 
 export function saveCheckedGroceries(items: string[]): void {
   window.localStorage.setItem(GROCERY_CHECKED_KEY, JSON.stringify(items));
+}
+
+export function clearStoredAppState(): void {
+  STORAGE_KEYS.forEach((key) => {
+    window.localStorage.removeItem(key);
+  });
+  window.sessionStorage.clear();
 }
