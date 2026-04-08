@@ -56,7 +56,6 @@ function App() {
   const [isGeneratingWeek, setIsGeneratingWeek] = useState(false);
   const [mealVideos, setMealVideos] = useState<Record<string, RecipeVideo | null>>({});
   const [checkedGroceries, setCheckedGroceries] = useState<string[]>(() => loadCheckedGroceries());
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!auth) {
@@ -163,13 +162,6 @@ function App() {
     profile.macroMode === "split"
       ? deriveMacroTargets(profile.calorieTarget, "split", profile.macroPreset)
       : profile.macroTargets;
-  const showProfileTab = !saved || editingProfile;
-
-  useEffect(() => {
-    if (!showProfileTab && activeTab === "profile") {
-      setActiveTab("day");
-    }
-  }, [activeTab, showProfileTab]);
 
   const todayDate = getTodayDate();
   const activeDayPlan = weekPlan?.days.find((day) => day.date === todayDate) ?? plan;
@@ -528,78 +520,29 @@ function App() {
   const accountLabel = isFirebaseConfigured
     ? authUser?.email ?? authUser?.displayName ?? "Signed in"
     : "Local mode";
-  const userInitial = (authUser?.displayName ?? authUser?.email ?? "U").trim().charAt(0).toUpperCase();
   const cuisineLabel = profile.cuisinePreference.replace("_", " ");
 
   return (
     <div className="app-shell">
       <main className="dashboard">
         <div className="app-header">
-          <TabsNav activeTab={activeTab} onChange={setActiveTab} showProfileTab={showProfileTab} />
+          <div className="app-topbar">
+            <AppStage
+              activeTab={activeTab}
+              calorieTarget={profile.calorieTarget}
+              cuisineLabel={cuisineLabel}
+              weekReady={Boolean(weekPlan)}
+              remindersCount={groupedReminders.reduce((sum, group) => sum + group.items.length, 0)}
+            />
+          </div>
 
-          {authUser ? (
-            <div className="user-menu">
-              <button
-                type="button"
-                className="user-menu-trigger"
-                onClick={() => setUserMenuOpen((current) => !current)}
-                aria-expanded={userMenuOpen}
-                aria-haspopup="menu"
-              >
-                {authUser.photoURL ? (
-                  <img className="user-avatar" src={authUser.photoURL} alt={accountLabel} />
-                ) : (
-                  <span className="user-avatar user-avatar-fallback">{userInitial}</span>
-                )}
-              </button>
-
-              {userMenuOpen ? (
-                <div className="user-menu-popover" role="menu">
-                  <div className="user-menu-summary">
-                    {authUser.photoURL ? (
-                      <img className="user-avatar" src={authUser.photoURL} alt={accountLabel} />
-                    ) : (
-                      <span className="user-avatar user-avatar-fallback">{userInitial}</span>
-                    )}
-                    <div>
-                      <strong>{authUser.displayName ?? "Your account"}</strong>
-                      <p>{accountLabel}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="user-menu-item"
-                    onClick={() => {
-                      setActiveTab("profile");
-                      setEditingProfile(true);
-                      setUserMenuOpen(false);
-                    }}
-                  >
-                    Edit preferences
-                  </button>
-                  <button
-                    type="button"
-                    className="user-menu-item"
-                    onClick={() => {
-                      setUserMenuOpen(false);
-                      void handleSignOut();
-                    }}
-                  >
-                    Sign out
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+          <TabsNav
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            showProfileTab
+            className="tabs-desktop"
+          />
         </div>
-
-        <AppStage
-          activeTab={activeTab}
-          calorieTarget={profile.calorieTarget}
-          cuisineLabel={cuisineLabel}
-          weekReady={Boolean(weekPlan)}
-          remindersCount={groupedReminders.reduce((sum, group) => sum + group.items.length, 0)}
-        />
 
         {activeTab === "profile" ? (
           <ProfilePanel
@@ -614,6 +557,8 @@ function App() {
             heightInput={heightInput}
             weightInput={weightInput}
             isGeneratingWeek={isGeneratingWeek}
+            authUser={authUser}
+            accountLabel={accountLabel}
             onSyncCalculatedCalories={syncCalculatedCalories}
             onCalorieInputChange={(value) => {
               setCalorieInput(value);
@@ -661,6 +606,8 @@ function App() {
             }}
             onProfileChange={updateProfile}
             onBuildWeek={saved && !editingProfile ? regenerateWeekPlan : handleBuildWeekOnly}
+            onEditProfile={() => setEditingProfile(true)}
+            onSignOut={authUser ? () => void handleSignOut() : undefined}
           />
         ) : null}
 
@@ -729,6 +676,15 @@ function App() {
           />
         ) : null}
       </main>
+
+      <div className="mobile-tab-dock">
+        <TabsNav
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          showProfileTab
+          className="tabs-mobile"
+        />
+      </div>
     </div>
   );
 }

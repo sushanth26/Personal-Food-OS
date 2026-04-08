@@ -1,3 +1,4 @@
+import { User } from "firebase/auth";
 import {
   ActivityLevel,
   BiologicalSex,
@@ -15,6 +16,8 @@ import PanelHero from "./PanelHero";
 type ProfilePanelProps = {
   saved: boolean;
   editingProfile: boolean;
+  authUser: User | null;
+  accountLabel: string;
   profile: NutritionProfile;
   exclusionOptions: Exclusion[];
   estimatedCalories: number;
@@ -35,11 +38,15 @@ type ProfilePanelProps = {
   onWeightInputBlur: () => void;
   onProfileChange: (updater: (current: NutritionProfile) => NutritionProfile) => void;
   onBuildWeek: () => void;
+  onEditProfile: () => void;
+  onSignOut?: () => void;
 };
 
 export default function ProfilePanel({
   saved,
   editingProfile,
+  authUser,
+  accountLabel,
   profile,
   exclusionOptions,
   estimatedCalories,
@@ -59,7 +66,9 @@ export default function ProfilePanel({
   onWeightInputChange,
   onWeightInputBlur,
   onProfileChange,
-  onBuildWeek
+  onBuildWeek,
+  onEditProfile,
+  onSignOut
 }: ProfilePanelProps) {
   return (
     <section className="panel panel-form active-panel">
@@ -416,6 +425,36 @@ export default function ProfilePanel({
         </form>
       ) : (
         <div className="profile-summary">
+          {authUser ? (
+            <div className="section-block account-card">
+              <p className="subheading">Account</p>
+              <div className="account-row">
+                <div className="account-avatar-wrap">
+                  {authUser.photoURL ? (
+                    <img className="user-avatar account-avatar" src={authUser.photoURL} alt={accountLabel} />
+                  ) : (
+                    <span className="user-avatar user-avatar-fallback account-avatar">
+                      {(authUser.displayName ?? authUser.email ?? "U").trim().charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="account-copy">
+                  <strong>{authUser.displayName ?? "Signed in user"}</strong>
+                  <p>{accountLabel}</p>
+                </div>
+              </div>
+              <div className="action-stack action-stack-inline">
+                <button className="ghost-button" type="button" onClick={onEditProfile}>
+                  Edit preferences
+                </button>
+                {onSignOut ? (
+                  <button className="ghost-button" type="button" onClick={onSignOut}>
+                    Sign out
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="stat-row">
             <span>Calories</span>
             <strong>{profile.calorieTarget}</strong>
@@ -463,6 +502,9 @@ export default function ProfilePanel({
             <strong>{profile.exclusions.length ? profile.exclusions.join(", ") : "none"}</strong>
           </div>
           <div className="action-stack">
+            <button className="ghost-button" type="button" onClick={onEditProfile}>
+              Edit preferences
+            </button>
             <button className="ghost-button" onClick={onBuildWeek} disabled={isGeneratingWeek}>
               {isGeneratingWeek ? "Generating weekly plan..." : "Build 7-day plan"}
             </button>

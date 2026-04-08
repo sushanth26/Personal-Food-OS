@@ -37,10 +37,10 @@ const tabCopy: Record<TabId, { eyebrow: string; title: string }> = {
 
 export default function AppStage({
   activeTab,
-  calorieTarget,
-  cuisineLabel,
-  weekReady,
-  remindersCount
+  calorieTarget: _calorieTarget,
+  cuisineLabel: _cuisineLabel,
+  weekReady: _weekReady,
+  remindersCount: _remindersCount
 }: AppStageProps) {
   const copy = tabCopy[activeTab];
 
@@ -49,13 +49,6 @@ export default function AppStage({
       <div className="app-stage-copy">
         <p className="eyebrow">{copy.eyebrow}</p>
         <h1>{copy.title}</h1>
-
-        <div className="stage-pill-row" aria-label="Current setup summary">
-          <span className="stage-pill">{calorieTarget} kcal target</span>
-          <span className="stage-pill">{cuisineLabel}</span>
-          <span className="stage-pill">{weekReady ? "week loaded" : "week not built"}</span>
-          <span className="stage-pill">{remindersCount} soak reminders</span>
-        </div>
       </div>
 
       <div className="app-stage-visual" aria-hidden="true">

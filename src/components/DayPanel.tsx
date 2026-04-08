@@ -72,7 +72,7 @@ export default function DayPanel({ plan, planError, isGenerating, mealVideos }: 
               const balanceSummary = getMealBalanceSummary(meal);
 
               return (
-                <details key={meal.id} className={`meal-card ${mealColorClass[meal.mealType]}`} open={meal.mealType === "breakfast"}>
+                <details key={meal.id} className={`meal-card ${mealColorClass[meal.mealType]}`}>
                   <summary className="meal-summary">
                     <div className="meal-summary-copy">
                       <div className="meal-headline-row">
