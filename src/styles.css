@@ -721,10 +721,25 @@ select {
   z-index: 1;
 }
 
+.app-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
 .panel-hero h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0;
   font-size: 1.02rem;
   line-height: 1.12;
+}
+
+.panel-hero-icon {
+  width: 20px;
+  height: 20px;
+  color: rgba(32, 65, 49, 0.9);
 }
 
 .panel-hero-copy {
@@ -741,6 +756,7 @@ select {
 .panel-hero-chip {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 28px;
   padding: 6px 10px;
   border-radius: 999px;
@@ -748,6 +764,12 @@ select {
   border: 1px solid rgba(16, 33, 22, 0.08);
   font-size: 0.76rem;
   color: #304438;
+}
+
+.panel-chip-icon {
+  width: 12px;
+  height: 12px;
+  opacity: 0.75;
 }
 
 .panel-hero-art {
@@ -798,9 +820,16 @@ select {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   position: relative;
   z-index: 1;
+}
+
+.panel-heading p,
+.panel-heading h2,
+.section-block p,
+.section-block h3 {
+  margin: 0;
 }
 
 .panel-heading h2 {
@@ -860,11 +889,24 @@ select {
 
 .section-block {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 14px;
+  padding: 18px;
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 248, 236, 0.98), rgba(251, 244, 232, 0.98));
   border: 1px solid rgba(139, 107, 63, 0.08);
+}
+
+.subheading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #25382d;
+}
+
+.helper-copy {
+  margin: 0;
+  color: #526558;
+  line-height: 1.55;
 }
 
 .profile-form label,
@@ -928,7 +970,8 @@ select {
 }
 
 .primary-button,
-.ghost-button {
+.ghost-button,
+.target-button {
   min-height: 48px;
   border-radius: 999px;
   border: 0;
@@ -952,6 +995,40 @@ select {
 .ghost-button {
   background: linear-gradient(180deg, rgba(243, 229, 205, 0.92), rgba(247, 238, 220, 0.9));
   color: #384332;
+}
+
+.target-button {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 24%, rgba(255, 247, 213, 0.85), transparent 22%),
+    linear-gradient(135deg, #2e6b46 0%, #e07a2f 54%, #f4c95a 100%);
+  color: #fffaf2;
+  box-shadow:
+    0 16px 30px rgba(154, 97, 33, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  font-weight: 700;
+}
+
+.target-button::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.target-button:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.08) brightness(1.03);
+  box-shadow:
+    0 20px 36px rgba(166, 93, 38, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.target-button:active {
+  transform: translateY(1px) scale(0.99);
 }
 
 .primary-button::before {
@@ -978,9 +1055,21 @@ select {
 
 .primary-button:hover,
 .ghost-button:hover,
+.target-button:hover,
 .user-menu-trigger:hover,
 .tab-button:hover {
   transform: translateY(-1px);
+}
+
+.tab-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .primary-button:hover {
@@ -1047,7 +1136,10 @@ select {
 
 .calculator-card {
   display: grid;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px;
+  align-items: start;
 }
 
 .profile-summary {
@@ -1061,12 +1153,40 @@ select {
 
 .stat-row,
 .ingredient-list li,
-.grocery-list li,
-.calculator-card {
+.grocery-list li {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
+}
+
+.calculator-card > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.calculator-card span {
+  display: block;
+  color: #5a6a5d;
+  font-size: 0.9rem;
+}
+
+.calculator-card strong {
+  display: block;
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #1f3528;
+}
+
+.calculator-card .target-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.profile-form {
+  gap: 16px;
 }
 
 .date-chip {
@@ -1201,8 +1321,8 @@ select {
 
 .meal-hero-amount strong,
 .mini-meal-amount strong {
-  font-size: clamp(1.4rem, 5vw, 2rem);
-  line-height: 0.94;
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+  line-height: 1.02;
   letter-spacing: -0.04em;
 }
 
@@ -1211,6 +1331,72 @@ select {
   margin: 0;
   color: #47594a;
   font-size: 0.95rem;
+}
+
+.mini-meal-detail {
+  margin: -2px 0 0;
+  color: #5f6b61;
+  font-size: 0.86rem;
+}
+
+.meal-balance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.balance-icon {
+  width: 15px;
+  height: 15px;
+  color: #304438;
+}
+
+.meal-balance-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(31, 58, 44, 0.12);
+  border: 1px solid rgba(31, 58, 44, 0.08);
+  color: #20382a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.meal-balance-copy {
+  color: #53665b;
+  font-size: 0.84rem;
+}
+
+.mini-balance-row {
+  margin-top: -2px;
+}
+
+.section-heading-with-icon,
+.reminder-tag,
+.video-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-icon,
+.button-icon,
+.tag-icon,
+.video-title-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.button-icon {
+  margin-right: 6px;
+}
+
+.video-title-row {
+  font-weight: 600;
 }
 
 .week-list,

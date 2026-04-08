@@ -1,3 +1,5 @@
+import AppIcon from "./AppIcon";
+
 type PanelHeroProps = {
   tone: "profile" | "day" | "week" | "reminders" | "groceries" | "family";
   kicker: string;
@@ -10,11 +12,15 @@ export default function PanelHero({ tone, kicker, title, chips = [] }: PanelHero
     <section className={`panel-hero panel-hero-${tone}`}>
       <div className="panel-hero-copy">
         <p className="section-kicker">{kicker}</p>
-        <h3>{title}</h3>
+        <h3>
+          <AppIcon name={tone} className="panel-hero-icon" />
+          <span>{title}</span>
+        </h3>
         {chips.length ? (
           <div className="panel-hero-chip-row">
             {chips.map((chip) => (
               <span key={chip} className="panel-hero-chip">
+                <AppIcon name="spark" className="panel-chip-icon" />
                 {chip}
               </span>
             ))}

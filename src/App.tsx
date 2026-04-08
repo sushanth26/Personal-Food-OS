@@ -9,7 +9,7 @@ import ProfilePanel from "./components/ProfilePanel";
 import RemindersPanel from "./components/RemindersPanel";
 import TabsNav from "./components/TabsNav";
 import WeekPanel from "./components/WeekPanel";
-import { auth, isFirebaseConfigured } from "./firebase";
+import { auth, isFirebaseConfigured, logAnalyticsEvent, setAnalyticsUser } from "./firebase";
 import { API_BASE_URL, defaultProfile, exclusionOptions, TabId } from "./lib/appConfig";
 import {
   buildWeeklyPlanFromDays,
@@ -41,6 +41,7 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [cloudLoading, setCloudLoading] = useState(false);
   const [profile, setProfile] = useState<NutritionProfile>(defaultProfile);
+  const [calorieInput, setCalorieInput] = useState(String(defaultProfile.calorieTarget));
   const [ageInput, setAgeInput] = useState(String(defaultProfile.age));
   const [heightInput, setHeightInput] = useState(String(defaultProfile.heightCm));
   const [weightInput, setWeightInput] = useState(String(defaultProfile.weightKg));
@@ -65,9 +66,11 @@ function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
       setAuthUser(nextUser);
+      void setAnalyticsUser(nextUser?.uid ?? null);
 
       if (!nextUser) {
         setProfile(defaultProfile);
+        setCalorieInput(String(defaultProfile.calorieTarget));
         setAgeInput(String(defaultProfile.age));
         setHeightInput(String(defaultProfile.heightCm));
         setWeightInput(String(defaultProfile.weightKg));
@@ -79,6 +82,7 @@ function App() {
         setMealVideos({});
         setActiveTab("profile");
         setAuthReady(true);
+        void logAnalyticsEvent("logged_out");
         return;
       }
 
@@ -92,6 +96,7 @@ function App() {
         const nextWeekPlan = cloudState.weekPlan;
 
         setProfile(nextProfile);
+        setCalorieInput(String(nextProfile.calorieTarget));
         setAgeInput(String(nextProfile.age));
         setHeightInput(String(nextProfile.heightCm));
         setWeightInput(String(nextProfile.weightKg));
@@ -114,6 +119,11 @@ function App() {
         if (!nextWeekPlan) {
           window.localStorage.removeItem("personal-food-os.week-plan");
         }
+        void logAnalyticsEvent("login_restored", {
+          has_profile: Boolean(cloudState.profile),
+          has_day_plan: Boolean(nextPlan),
+          has_week_plan: Boolean(nextWeekPlan)
+        });
       } catch (error) {
         console.error("cloud-state load error", error);
       } finally {
@@ -128,6 +138,13 @@ function App() {
   useEffect(() => {
     saveCheckedGroceries(checkedGroceries);
   }, [checkedGroceries]);
+
+  useEffect(() => {
+    void logAnalyticsEvent("tab_view", {
+      tab_id: activeTab,
+      signed_in: Boolean(authUser)
+    });
+  }, [activeTab, authUser]);
 
   const estimatedCalories = useMemo(
     () =>
@@ -273,15 +290,23 @@ function App() {
     }
 
     setProfile(nextProfile);
+    setCalorieInput(String(nextProfile.calorieTarget));
     setAgeInput(String(nextProfile.age));
     setHeightInput(String(nextProfile.heightCm));
     setWeightInput(String(nextProfile.weightKg));
     setSaved(true);
     setEditingProfile(false);
+    void logAnalyticsEvent("profile_saved", {
+      cuisine: nextProfile.cuisinePreference,
+      dietary_pattern: nextProfile.dietaryPattern,
+      meals_per_day: nextProfile.mealsPerDay,
+      repeats_enabled: nextProfile.allowRepeats
+    });
     return nextProfile;
   }
 
   function syncCalculatedCalories() {
+    setCalorieInput(String(estimatedCalories));
     setProfile((current) => ({
       ...current,
       calorieTarget: estimatedCalories
@@ -315,6 +340,12 @@ function App() {
     setIsGenerating(true);
     setPlanError(null);
     setActiveTab("day");
+    void logAnalyticsEvent("day_plan_requested", {
+      date,
+      meals_per_day: nextProfile.mealsPerDay,
+      cuisine: nextProfile.cuisinePreference,
+      prep_preference: nextProfile.prepPreference
+    });
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/meal-plan`, {
@@ -334,11 +365,18 @@ function App() {
       void safeSaveCloudState({ plan: payload.plan });
       setPlanError(null);
       setMealVideos({});
+      void logAnalyticsEvent("day_plan_generated", {
+        date: payload.plan.date,
+        meal_count: payload.plan.meals.length,
+        reminder_count: payload.plan.reminders.length,
+        grocery_count: payload.plan.groceryList.length
+      });
 
       return payload.plan;
     } catch (error) {
       setPlan(null);
       setPlanError(error instanceof Error ? error.message : "Unable to generate an AI plan right now.");
+      void logAnalyticsEvent("day_plan_failed", { date });
       return null;
     } finally {
       setIsGenerating(false);
@@ -353,6 +391,12 @@ function App() {
     setPlan(null);
     setMealVideos({});
     setCheckedGroceries([]);
+    void logAnalyticsEvent("week_plan_requested", {
+      start_date: getWeekStartDate(),
+      meals_per_day: nextProfile.mealsPerDay,
+      cuisine: nextProfile.cuisinePreference,
+      repeats_enabled: nextProfile.allowRepeats
+    });
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/weekly-meal-plan`, {
@@ -383,9 +427,16 @@ function App() {
       }
 
       setWeekError(null);
+      void logAnalyticsEvent("week_plan_generated", {
+        day_count: payload.weekPlan.days.length,
+        grocery_count: payload.weekPlan.groceryList.length
+      });
     } catch (error) {
       setWeekPlan(null);
       setWeekError(error instanceof Error ? error.message : "Unable to generate a weekly AI plan right now.");
+      void logAnalyticsEvent("week_plan_failed", {
+        start_date: getWeekStartDate()
+      });
     } finally {
       setIsGeneratingWeek(false);
     }
@@ -439,10 +490,12 @@ function App() {
       return;
     }
 
+    void logAnalyticsEvent("logout_clicked");
     await signOut(auth);
     clearStoredAppState();
     setAuthUser(null);
     setProfile(defaultProfile);
+    setCalorieInput(String(defaultProfile.calorieTarget));
     setAgeInput(String(defaultProfile.age));
     setHeightInput(String(defaultProfile.heightCm));
     setWeightInput(String(defaultProfile.weightKg));
@@ -556,11 +609,23 @@ function App() {
             exclusionOptions={exclusionOptions}
             estimatedCalories={estimatedCalories}
             displayedTargets={displayedTargets}
+            calorieInput={calorieInput}
             ageInput={ageInput}
             heightInput={heightInput}
             weightInput={weightInput}
             isGeneratingWeek={isGeneratingWeek}
             onSyncCalculatedCalories={syncCalculatedCalories}
+            onCalorieInputChange={(value) => {
+              setCalorieInput(value);
+              if (value !== "") {
+                setProfile((current) => ({ ...current, calorieTarget: Number(value) }));
+              }
+            }}
+            onCalorieInputBlur={() => {
+              if (calorieInput === "") {
+                setCalorieInput(String(profile.calorieTarget));
+              }
+            }}
             onAgeInputChange={(value) => {
               setAgeInput(value);
               if (value !== "") {

@@ -1,6 +1,7 @@
 import { DailyMealPlan, RecipeVideo } from "../types";
 import { mealColorClass } from "../lib/appConfig";
-import { getMealPortionSummary } from "../lib/foodUtils";
+import { getMealBalanceSummary, getMealServingDisplay } from "../lib/foodUtils";
+import AppIcon from "./AppIcon";
 import PanelHero from "./PanelHero";
 
 type DayPanelProps = {
@@ -38,7 +39,7 @@ export default function DayPanel({ plan, planError, isGenerating, mealVideos }: 
 
       {!plan && !planError && !isGenerating ? (
         <div className="empty-state">
-          Save your profile to generate an AI-assisted day plan with gram-based portions, reminders, and groceries.
+          Save your profile to generate an AI-assisted day plan with realistic serving guidance, reminders, and groceries.
         </div>
       ) : null}
 
@@ -67,7 +68,8 @@ export default function DayPanel({ plan, planError, isGenerating, mealVideos }: 
 
           <div className="meal-list">
             {plan.meals.map((meal) => {
-              const portionSummary = getMealPortionSummary(meal.ingredients);
+              const servingDisplay = getMealServingDisplay(meal);
+              const balanceSummary = getMealBalanceSummary(meal);
 
               return (
                 <details key={meal.id} className={`meal-card ${mealColorClass[meal.mealType]}`} open={meal.mealType === "breakfast"}>
@@ -82,14 +84,14 @@ export default function DayPanel({ plan, planError, isGenerating, mealVideos }: 
 
                       <div className="meal-hero-amount">
                         <span>Eat this</span>
-                        <strong>About {portionSummary.totalQuantity}g</strong>
-                        <p>
-                          {portionSummary.mainIngredients.length
-                            ? portionSummary.mainIngredients
-                                .map((ingredient) => `${Math.round(ingredient.quantity)}g ${ingredient.shortName}`)
-                                .join(" + ")
-                            : `${meal.totalCalories} kcal planned`}
-                        </p>
+                        <strong>{servingDisplay.primary}</strong>
+                        {servingDisplay.secondary ? <p>{servingDisplay.secondary}</p> : null}
+                      </div>
+
+                      <div className="meal-balance-row">
+                        <AppIcon name="balance" className="balance-icon" />
+                        <span className="meal-balance-chip">{balanceSummary.label}</span>
+                        {balanceSummary.detail ? <span className="meal-balance-copy">{balanceSummary.detail}</span> : null}
                       </div>
                     </div>
 
@@ -103,19 +105,14 @@ export default function DayPanel({ plan, planError, isGenerating, mealVideos }: 
 
                   <div className="meal-details">
                     <div className="portion-box">
-                      <span>Main components</span>
-                      <strong>{portionSummary.mainIngredients.length ? "What your plate should center on" : "One simple serving"}</strong>
-                      <p className="portion-copy">
-                        {portionSummary.mainIngredients.length
-                          ? portionSummary.mainIngredients
-                              .map((ingredient) => `${Math.round(ingredient.quantity)}g ${ingredient.shortName}`)
-                              .join(" + ")
-                          : "Follow the recipe video for the simplest serving flow."}
-                      </p>
+                      {servingDisplay.detail ? <p className="portion-copy">{servingDisplay.detail}</p> : null}
                     </div>
 
                     <div className="video-card">
-                      <span>Top recipe video</span>
+                      <span className="video-title-row">
+                        <AppIcon name="spark" className="video-title-icon" />
+                        <span>Top recipe video</span>
+                      </span>
                       {mealVideos[meal.id] ? (
                         <a className="video-link" href={mealVideos[meal.id]!.url} target="_blank" rel="noreferrer">
                           {mealVideos[meal.id]!.thumbnailUrl ? (

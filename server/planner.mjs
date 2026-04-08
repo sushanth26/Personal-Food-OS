@@ -40,10 +40,17 @@ Requirements:
 - Keep meal names concise, under 5 words if possible.
 - Keep each meal simple: 2 to 4 ingredients only.
 - Prefer common dishes over creative variations.
+- Breakfast, lunch, and dinner should each feel balanced on their own, not just in the day total.
+- Most main meals should include a clear protein anchor plus a practical carb or fiber component.
+- Avoid making lunch or dinner feel like only one ingredient plus sauce.
  - ${repeatMealsInstruction}
  ${avoidMealsInstruction}
  ${avoidSnackInstruction}
 - All ingredient amounts must be in grams.
+- For each meal, include a serving.primary field that says how a real person should eat it using familiar household serving language.
+- For Indian meals prefer words like bowl, katori, cup, roti, dosa, idli, pieces, glass, plate.
+- serving.primary should be the main instruction, like "1 bowl moong dal + 2 rotis".
+- serving.secondary can be a short support line like "Protein-forward lunch" or "Approx. 320g cooked total", but do not make grams the main instruction.
 - Do not include explanations outside the meal fields.
 - If a snack is included, rotate snacks across the week. Snacks should be the least repeated meal slot.
 - Return valid JSON only.
@@ -74,6 +81,41 @@ function inferReminders(targetDate, meals) {
   });
 
   return reminders;
+}
+
+function fallbackServingPrimary(meal) {
+  const name = meal.name.toLowerCase();
+
+  if (/(roti|chapati|phulka)/.test(name)) {
+    return `2 rotis with ${meal.name.toLowerCase().replace(/\b(roti|chapati|phulka)\b/g, "").replace(/\s+/g, " ").trim() || "your main dish"}`;
+  }
+
+  if (/(paratha|dosa|cheela|chilla|uttapam)/.test(name)) {
+    return `1 plate ${meal.name.toLowerCase()}`;
+  }
+
+  if (/(idli)/.test(name)) {
+    return `3 idlis`;
+  }
+
+  if (/(rice|poha|upma|pulao|biryani|khichdi|oats)/.test(name)) {
+    return `1 bowl ${meal.name.toLowerCase()}`;
+  }
+
+  if (/(dal|rajma|chole|sabzi|paneer|curry|sambar|khichdi)/.test(name)) {
+    return `1 bowl ${meal.name.toLowerCase()}`;
+  }
+
+  if (meal.mealType === "snack") {
+    return `1 serving ${meal.name.toLowerCase()}`;
+  }
+
+  return `1 serving ${meal.name.toLowerCase()}`;
+}
+
+function fallbackServingSecondary(meal) {
+  const totalQuantity = round(meal.ingredients.reduce((sum, ingredient) => sum + ingredient.quantity, 0));
+  return `Approx. ${totalQuantity}g cooked total`;
 }
 
 export async function normalizeGroceriesWithAI(items, cuisinePreference) {
@@ -185,6 +227,10 @@ async function postProcessPlan(aiPlan, cuisinePreference) {
     totalCarbs: round(meal.totalCarbs),
     totalFat: round(meal.totalFat),
     scaleFactor: 1,
+    serving: {
+      primary: meal.serving?.primary?.trim() || fallbackServingPrimary(meal),
+      secondary: meal.serving?.secondary?.trim() || fallbackServingSecondary(meal)
+    },
     ingredients: meal.ingredients.map((ingredient) => ({
       ingredientId: getIngredientKey(ingredient.ingredientName),
       ingredientName: formatIngredientName(ingredient.ingredientName),

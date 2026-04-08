@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { User } from "firebase/auth";
 import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider, isFirebaseConfigured } from "./firebase";
+import { auth, googleProvider, isFirebaseConfigured, logAnalyticsEvent } from "./firebase";
 
 type AuthScreenProps = {
   onSignedIn: (user: User) => void;
@@ -19,12 +19,15 @@ export default function AuthScreen({ onSignedIn }: AuthScreenProps) {
 
     setIsSigningIn(true);
     setAuthError(null);
+    void logAnalyticsEvent("login_started", { method: "google" });
 
     try {
       const result = await signInWithPopup(auth, googleProvider);
+      void logAnalyticsEvent("login_success", { method: "google" });
       onSignedIn(result.user);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to sign in with Google right now.";
+      void logAnalyticsEvent("login_error", { method: "google" });
       setAuthError(message);
     } finally {
       setIsSigningIn(false);

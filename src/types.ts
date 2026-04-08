@@ -94,6 +94,10 @@ export interface PlannedMeal {
   totalCarbs: number;
   totalFat: number;
   scaleFactor: number;
+  serving?: {
+    primary: string;
+    secondary?: string;
+  };
   ingredients: MealIngredientPortion[];
 }
 

@@ -1,5 +1,6 @@
 import { Reminder } from "../types";
 import { formatDisplayDate } from "../lib/foodUtils";
+import AppIcon from "./AppIcon";
 import PanelHero from "./PanelHero";
 
 type ReminderGroup = {
@@ -51,7 +52,10 @@ export default function RemindersPanel({ groupedReminders }: RemindersPanelProps
               <div className="reminder-group-list">
                 {group.items.map((reminder) => (
                   <article key={reminder.id} className={`reminder-card ${reminder.type}`}>
-                    <span className="reminder-tag">{reminder.type}</span>
+                    <span className="reminder-tag">
+                      <AppIcon name="reminders" className="tag-icon" />
+                      {reminder.type}
+                    </span>
                     <h3>{reminder.title}</h3>
                     <p>
                       For {formatDisplayDate(reminder.targetDate)} {reminder.linkedMealName}

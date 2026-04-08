@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { TabId, tabs } from "../lib/appConfig";
+import AppIcon from "./AppIcon";
 
 type TabsNavProps = {
   activeTab: TabId;
@@ -36,8 +37,10 @@ export default function TabsNav({ activeTab, onChange, showProfileTab = true }: 
           className={activeTab === tab.id ? `tab-button active tab-${tab.accent}` : `tab-button tab-${tab.accent}`}
           onClick={() => onChange(tab.id)}
         >
-          <span className="tab-dot" aria-hidden="true" />
-          {tab.label}
+          <span className="tab-content">
+            <AppIcon name={tab.id} className="tab-icon" />
+            <span>{tab.label}</span>
+          </span>
         </button>
       ))}
     </nav>

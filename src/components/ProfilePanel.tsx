@@ -19,11 +19,14 @@ type ProfilePanelProps = {
   exclusionOptions: Exclusion[];
   estimatedCalories: number;
   displayedTargets: NutritionProfile["macroTargets"];
+  calorieInput: string;
   ageInput: string;
   heightInput: string;
   weightInput: string;
   isGeneratingWeek: boolean;
   onSyncCalculatedCalories: () => void;
+  onCalorieInputChange: (value: string) => void;
+  onCalorieInputBlur: () => void;
   onAgeInputChange: (value: string) => void;
   onAgeInputBlur: () => void;
   onHeightInputChange: (value: string) => void;
@@ -41,11 +44,14 @@ export default function ProfilePanel({
   exclusionOptions,
   estimatedCalories,
   displayedTargets,
+  calorieInput,
   ageInput,
   heightInput,
   weightInput,
   isGeneratingWeek,
   onSyncCalculatedCalories,
+  onCalorieInputChange,
+  onCalorieInputBlur,
   onAgeInputChange,
   onAgeInputBlur,
   onHeightInputChange,
@@ -172,7 +178,7 @@ export default function ProfilePanel({
                 <span>Recommended starting target</span>
                 <strong>{estimatedCalories} kcal/day</strong>
               </div>
-              <button className="ghost-button" type="button" onClick={onSyncCalculatedCalories}>
+              <button className="target-button" type="button" onClick={onSyncCalculatedCalories}>
                 Use this target
               </button>
             </div>
@@ -186,13 +192,9 @@ export default function ProfilePanel({
                 type="number"
                 min={1200}
                 max={5000}
-                value={profile.calorieTarget}
-                onChange={(event) =>
-                  onProfileChange((current) => ({
-                    ...current,
-                    calorieTarget: Number(event.target.value || current.calorieTarget)
-                  }))
-                }
+                value={calorieInput}
+                onChange={(event) => onCalorieInputChange(event.target.value)}
+                onBlur={onCalorieInputBlur}
               />
             </label>
 
