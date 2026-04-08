@@ -20,9 +20,9 @@ import {
 } from "./lib/foodUtils";
 import { deriveMacroTargets, estimateDailyCalories } from "./planner";
 import {
+  clearStoredAppState,
   loadCheckedGroceries,
   loadPlan,
-  loadProfile,
   loadWeekPlan,
   saveCheckedGroceries,
   savePlan,
@@ -66,6 +66,17 @@ function App() {
       setAuthUser(nextUser);
 
       if (!nextUser) {
+        setProfile(defaultProfile);
+        setAgeInput(String(defaultProfile.age));
+        setHeightInput(String(defaultProfile.heightCm));
+        setWeightInput(String(defaultProfile.weightKg));
+        setSaved(false);
+        setEditingProfile(false);
+        setPlan(null);
+        setWeekPlan(null);
+        setCheckedGroceries([]);
+        setMealVideos({});
+        setActiveTab("profile");
         setAuthReady(true);
         return;
       }
@@ -73,14 +84,11 @@ function App() {
       setCloudLoading(true);
 
       try {
-        const localProfile = loadProfile();
-        const localPlan = loadPlan();
-        const localWeekPlan = loadWeekPlan();
         const cloudState = await loadCloudFoodState(nextUser.uid);
 
-        const nextProfile = cloudState.profile ?? localProfile ?? defaultProfile;
-        const nextPlan = cloudState.plan ?? localPlan;
-        const nextWeekPlan = cloudState.weekPlan ?? localWeekPlan;
+        const nextProfile = cloudState.profile ?? defaultProfile;
+        const nextPlan = cloudState.plan;
+        const nextWeekPlan = cloudState.weekPlan;
 
         setProfile(nextProfile);
         setAgeInput(String(nextProfile.age));
@@ -88,7 +96,9 @@ function App() {
         setWeightInput(String(nextProfile.weightKg));
         setPlan(nextPlan);
         setWeekPlan(nextWeekPlan);
-        setSaved(Boolean(cloudState.profile ?? localProfile));
+        setCheckedGroceries([]);
+        setMealVideos({});
+        setSaved(Boolean(cloudState.profile));
 
         saveProfile(nextProfile);
         if (nextPlan) {
@@ -97,13 +107,11 @@ function App() {
         if (nextWeekPlan) {
           saveWeekPlan(nextWeekPlan);
         }
-
-        if (!cloudState.profile && (localProfile || localPlan || localWeekPlan)) {
-          await saveCloudFoodState(nextUser.uid, {
-            profile: localProfile ?? nextProfile,
-            plan: localPlan ?? null,
-            weekPlan: localWeekPlan ?? null
-          });
+        if (!nextPlan) {
+          window.localStorage.removeItem("personal-food-os.plan");
+        }
+        if (!nextWeekPlan) {
+          window.localStorage.removeItem("personal-food-os.week-plan");
         }
       } catch (error) {
         console.error("cloud-state load error", error);
@@ -431,7 +439,19 @@ function App() {
     }
 
     await signOut(auth);
+    clearStoredAppState();
     setAuthUser(null);
+    setProfile(defaultProfile);
+    setAgeInput(String(defaultProfile.age));
+    setHeightInput(String(defaultProfile.heightCm));
+    setWeightInput(String(defaultProfile.weightKg));
+    setSaved(false);
+    setEditingProfile(false);
+    setPlan(null);
+    setWeekPlan(null);
+    setCheckedGroceries([]);
+    setMealVideos({});
+    setActiveTab("profile");
     setAuthReady(true);
   }
 
