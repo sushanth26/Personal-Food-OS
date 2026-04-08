@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { deriveMacroTargets, estimateDailyCalories } from "./planner";
 import {
+  loadCheckedGroceries,
   loadPlan,
   loadProfile,
   loadWeekPlan,
+  saveCheckedGroceries,
   savePlan,
   saveProfile,
   saveWeekPlan
@@ -56,6 +58,176 @@ function formatIngredientLabel(name: string) {
     .trim();
 }
 
+function getGroceryKey(name: string) {
+  return formatIngredientLabel(name)
+    .toLowerCase()
+    .replace(/\sfresh\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleCaseWords(value: string) {
+  return value.replace(/\b[a-z]/g, (match) => match.toUpperCase());
+}
+
+function getGroceryCategory(name: string) {
+  const normalized = getDedupedGroceryKey(name);
+
+  if (/(apple|banana|orange|mango|papaya|berry|berries|grape|guava|melon|pineapple|pear|pomegranate)/.test(normalized)) {
+    return "fruits";
+  }
+
+  if (
+    /(spinach|palak|onion|tomato|cucumber|carrot|beans|capsicum|pepper|broccoli|cauliflower|cabbage|okra|bhindi|eggplant|brinjal|peas|potato|sweet potato|lettuce|mint|coriander|cilantro|ginger|garlic|chili|lemon|lime)/.test(
+      normalized
+    )
+  ) {
+    return "vegetables";
+  }
+
+  return "dry_items";
+}
+
+function singularizeWord(value: string) {
+  if (value.endsWith("ies")) {
+    return `${value.slice(0, -3)}y`;
+  }
+
+  if (value.endsWith("oes")) {
+    return value.slice(0, -2);
+  }
+
+  if (value.endsWith("s") && !value.endsWith("ss")) {
+    return value.slice(0, -1);
+  }
+
+  return value;
+}
+
+function getDedupedGroceryKey(name: string) {
+  return getGroceryKey(name)
+    .split(" ")
+    .map((part) => singularizeWord(part))
+    .join(" ")
+    .replace(/\bboneless\b/g, "")
+    .replace(/\bskinless\b/g, "")
+    .replace(/\braw\b/g, "")
+    .replace(/\bboiled\b/g, "")
+    .replace(/\broasted\b/g, "")
+    .replace(/\bsauteed\b/g, "")
+    .replace(/\bstir fried\b/g, "")
+    .replace(/\bsteamed\b/g, "")
+    .replace(/\bsoaked\b/g, "")
+    .replace(/\bmarinated\b/g, "")
+    .replace(/\bcrumbled\b/g, "")
+    .replace(/\bcube\b/g, "")
+    .replace(/\bcubed\b/g, "")
+    .replace(/\bcubes\b/g, "")
+    .replace(/\bdiced\b/g, "")
+    .replace(/\bsliced\b/g, "")
+    .replace(/\bchopped\b/g, "")
+    .replace(/\bminced\b/g, "")
+    .replace(/\bmashed\b/g, "")
+    .replace(/\bshredded\b/g, "")
+    .replace(/\bgrated\b/g, "")
+    .replace(/\bhalved\b/g, "")
+    .replace(/\bquartered\b/g, "")
+    .replace(/\bpieces\b/g, "")
+    .replace(/\bpiece\b/g, "")
+    .replace(/\bfillet\b/g, "")
+    .replace(/\bbreast\b/g, "")
+    .replace(/\bthigh\b/g, "")
+    .replace(/\bdrumstick\b/g, "")
+    .replace(/\brolled\b/g, "")
+    .replace(/\bsteel cut\b/g, "")
+    .replace(/\bquick\b/g, "")
+    .replace(/\bextra virgin\b/g, "")
+    .replace(/\bvirgin\b/g, "")
+    .replace(/\blow fat\b/g, "")
+    .replace(/\bfull fat\b/g, "")
+    .replace(/\bnonfat\b/g, "")
+    .replace(/\bunsweetened\b/g, "")
+    .replace(/\bseedless\b/g, "")
+    .replace(/\bwhole wheat roti\b/g, "whole wheat flour")
+    .replace(/\bwhole wheat chapati\b/g, "whole wheat flour")
+    .replace(/\bwhole wheat flour dough\b/g, "whole wheat flour")
+    .replace(/\broti dough\b/g, "whole wheat flour")
+    .replace(/\bchapati dough\b/g, "whole wheat flour")
+    .replace(/\bparatha dough\b/g, "whole wheat flour")
+    .replace(/\bdough\b/g, "")
+    .replace(/\broti\b/g, "whole wheat flour")
+    .replace(/\bchapati\b/g, "whole wheat flour")
+    .replace(/\bparatha\b/g, "whole wheat flour")
+    .replace(/\bgreen chili\b/g, "chili")
+    .replace(/\bred chili\b/g, "chili")
+    .replace(/\bchillies\b/g, "chili")
+    .replace(/\bchilies\b/g, "chili")
+    .replace(/\bcilantro\b/g, "coriander")
+    .replace(/\bcurd\b/g, "yogurt")
+    .replace(/\bgarbanzo bean\b/g, "chickpea")
+    .replace(/\bgarbanzo\b/g, "chickpea")
+    .replace(/\bchole\b/g, "chickpea")
+    .replace(/\btoor dal\b/g, "dal")
+    .replace(/\bmoong dal\b/g, "dal")
+    .replace(/\bmasoor dal\b/g, "dal")
+    .replace(/\bchana dal\b/g, "dal")
+    .replace(/\bbasmati rice\b/g, "rice")
+    .replace(/\bbrown rice\b/g, "rice")
+    .replace(/\bwhite rice\b/g, "rice")
+    .replace(/\bjasmine rice\b/g, "rice")
+    .replace(/\bgreek yogurt\b/g, "yogurt")
+    .replace(/\bhung curd\b/g, "yogurt")
+    .replace(/\brolled oat\b/g, "oat")
+    .replace(/\boatmeal\b/g, "oat")
+    .replace(/\boat\b/g, "oats")
+    .replace(/\bchicken breast\b/g, "chicken")
+    .replace(/\bchicken thigh\b/g, "chicken")
+    .replace(/\bchicken drumstick\b/g, "chicken")
+    .replace(/\bground chicken\b/g, "chicken")
+    .replace(/\bground turkey\b/g, "turkey")
+    .replace(/\begg white\b/g, "egg")
+    .replace(/\begg yolk\b/g, "egg")
+    .replace(/\bscallion\b/g, "spring onion")
+    .replace(/\bspring onions\b/g, "spring onion")
+    .replace(/\bgreen onion\b/g, "spring onion")
+    .replace(/\bgreen onions\b/g, "spring onion")
+    .replace(/\bbell pepper\b/g, "capsicum")
+    .replace(/\bbell peppers\b/g, "capsicum")
+    .replace(/\bwhole wheat flour whole wheat flour\b/g, "whole wheat flour")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCanonicalGroceryName(name: string) {
+  const normalized = getDedupedGroceryKey(name);
+  return titleCaseWords(normalized || formatIngredientLabel(name));
+}
+
+function groupGroceryItems(items: GroceryListItem[]) {
+  const grouped = {
+    fruits: [] as GroceryListItem[],
+    vegetables: [] as GroceryListItem[],
+    dry_items: [] as GroceryListItem[]
+  };
+  const seen = new Set<string>();
+
+  items.forEach((item) => {
+    const dedupedKey = getDedupedGroceryKey(item.ingredientName);
+    if (seen.has(dedupedKey)) {
+      return;
+    }
+
+    seen.add(dedupedKey);
+    grouped[getGroceryCategory(item.ingredientName)].push({
+      ...item,
+      ingredientId: dedupedKey,
+      ingredientName: getCanonicalGroceryName(item.ingredientName)
+    });
+  });
+
+  return grouped;
+}
+
 function getMealPortionSummary(
   ingredients: Array<{ ingredientName: string; quantity: number }>
 ) {
@@ -83,11 +255,47 @@ function formatContext(context: string) {
 }
 
 function formatDisplayDate(value: string) {
+  if (!value) {
+    return "unscheduled day";
+  }
+
+  const date = new Date(`${value}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    return "unscheduled day";
+  }
+
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric"
-  }).format(new Date(`${value}T12:00:00Z`));
+  }).format(date);
+}
+
+function getDisplayedReminders(plan: DailyMealPlan | null, weekPlan: WeeklyMealPlan | null) {
+  if (weekPlan) {
+    return weekPlan.days.flatMap((day) => day.reminders);
+  }
+
+  return plan?.reminders ?? [];
+}
+
+function groupRemindersBySoakDate(reminders: ReturnType<typeof getDisplayedReminders>) {
+  const today = new Date().toISOString().slice(0, 10);
+  const reminderMap = new Map<string, typeof reminders>();
+
+  reminders.forEach((reminder) => {
+    const key = reminder.soakOnDate ?? reminder.targetDate ?? "unscheduled";
+    if (key !== "unscheduled" && key < today) {
+      return;
+    }
+    const group = reminderMap.get(key) ?? [];
+    group.push(reminder);
+    reminderMap.set(key, group);
+  });
+
+  return [...reminderMap.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, items]) => ({ date, items }));
 }
 
 function getWeekStartDate() {
@@ -98,16 +306,25 @@ function getWeekStartDate() {
   return today.toISOString().slice(0, 10);
 }
 
+function getTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function aggregateWeeklyGroceryList(days: DailyMealPlan[]): GroceryListItem[] {
   const ingredientMap = new Map<string, GroceryListItem>();
 
   for (const day of days) {
     for (const item of day.groceryList) {
-      const existing = ingredientMap.get(item.ingredientId);
+      const itemKey = getGroceryKey(item.ingredientName);
+      const existing = ingredientMap.get(itemKey);
       if (existing) {
         existing.totalQuantity = Math.round((existing.totalQuantity + item.totalQuantity) * 10) / 10;
       } else {
-        ingredientMap.set(item.ingredientId, { ...item });
+        ingredientMap.set(itemKey, {
+          ...item,
+          ingredientId: itemKey,
+          ingredientName: formatIngredientLabel(item.ingredientName)
+        });
       }
     }
   }
@@ -156,6 +373,9 @@ const defaultProfile: NutritionProfile = {
 
 function App() {
   const [profile, setProfile] = useState<NutritionProfile>(defaultProfile);
+  const [ageInput, setAgeInput] = useState(String(defaultProfile.age));
+  const [heightInput, setHeightInput] = useState(String(defaultProfile.heightCm));
+  const [weightInput, setWeightInput] = useState(String(defaultProfile.weightKg));
   const [saved, setSaved] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -166,6 +386,7 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingWeek, setIsGeneratingWeek] = useState(false);
   const [mealVideos, setMealVideos] = useState<Record<string, RecipeVideo | null>>({});
+  const [checkedGroceries, setCheckedGroceries] = useState<string[]>(() => loadCheckedGroceries());
 
   useEffect(() => {
     const storedProfile = loadProfile();
@@ -174,8 +395,15 @@ function App() {
     }
 
     setProfile(storedProfile);
+    setAgeInput(String(storedProfile.age));
+    setHeightInput(String(storedProfile.heightCm));
+    setWeightInput(String(storedProfile.weightKg));
     setSaved(true);
   }, []);
+
+  useEffect(() => {
+    saveCheckedGroceries(checkedGroceries);
+  }, [checkedGroceries]);
 
   const estimatedCalories = useMemo(
     () =>
@@ -194,6 +422,23 @@ function App() {
     profile.macroMode === "split"
       ? deriveMacroTargets(profile.calorieTarget, "split", profile.macroPreset)
       : profile.macroTargets;
+  const todayDate = getTodayDate();
+  const currentWeekDayPlan = weekPlan?.days.find((day) => day.date === todayDate) ?? null;
+  const activeDayPlan = currentWeekDayPlan ?? plan;
+  const displayedReminders = getDisplayedReminders(plan, weekPlan);
+  const groupedReminders = groupRemindersBySoakDate(displayedReminders);
+  const displayedGroceries = weekPlan?.groceryList ?? activeDayPlan?.groceryList ?? [];
+  const groupedGroceries = groupGroceryItems(displayedGroceries);
+
+  function toggleGroceryItem(itemId: string) {
+    setCheckedGroceries((current) =>
+      current.includes(itemId) ? current.filter((entry) => entry !== itemId) : [...current, itemId]
+    );
+  }
+
+  function clearCheckedGroceries() {
+    setCheckedGroceries([]);
+  }
 
   useEffect(() => {
     const mealsToLoad = [
@@ -239,6 +484,18 @@ function App() {
       cancelled = true;
     };
   }, [plan, weekPlan, profile.cuisinePreference]);
+
+  function persistProfile() {
+    const nextProfile = updateDerivedTargets(profile);
+    saveProfile(nextProfile);
+    setProfile(nextProfile);
+    setAgeInput(String(nextProfile.age));
+    setHeightInput(String(nextProfile.heightCm));
+    setWeightInput(String(nextProfile.weightKg));
+    setSaved(true);
+    setEditingProfile(false);
+    return nextProfile;
+  }
 
   function syncCalculatedCalories() {
     setProfile((current) => ({
@@ -319,6 +576,11 @@ function App() {
 
       setWeekPlan(payload.weekPlan);
       saveWeekPlan(payload.weekPlan);
+      const todaysPlan = payload.weekPlan.days.find((day) => day.date === todayDate) ?? null;
+      if (todaysPlan) {
+        setPlan(todaysPlan);
+        savePlan(todaysPlan);
+      }
       setWeekError(null);
     } catch (error) {
       setWeekPlan(null);
@@ -328,19 +590,10 @@ function App() {
     }
   }
 
-  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextProfile = updateDerivedTargets(profile);
-    saveProfile(nextProfile);
-    setProfile(nextProfile);
-    setSaved(true);
-    setEditingProfile(false);
-
-    await requestMealPlan(nextProfile);
-  }
-
-  async function regeneratePlan() {
-    await requestMealPlan(updateDerivedTargets(profile));
+  async function handleBuildWeekOnly() {
+    const nextProfile = persistProfile();
+    setPlanError(null);
+    await requestWeekPlan(nextProfile);
   }
 
   async function regenerateWeekPlan() {
@@ -378,6 +631,10 @@ function App() {
       const nextWeekPlan = buildWeeklyPlanFromDays(weekPlan.startDate, updatedDays);
       setWeekPlan(nextWeekPlan);
       saveWeekPlan(nextWeekPlan);
+      if (date === todayDate) {
+        setPlan(payload.plan!);
+        savePlan(payload.plan!);
+      }
     } catch (error) {
       setWeekError(error instanceof Error ? error.message : "Unable to refresh this day right now.");
     } finally {
@@ -415,7 +672,12 @@ function App() {
           </div>
 
           {!saved || editingProfile ? (
-            <form className="profile-form" onSubmit={handleProfileSubmit}>
+            <form
+              className="profile-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+              }}
+            >
               <div className="section-block">
                 <p className="subheading">Calorie target helper</p>
                 <p className="helper-copy">
@@ -443,13 +705,26 @@ function App() {
                       type="number"
                       min={18}
                       max={90}
-                      value={profile.age}
-                      onChange={(event) =>
+                      value={ageInput}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setAgeInput(nextValue);
+                        if (nextValue === "") {
+                          return;
+                        }
+
                         setProfile((current) => ({
                           ...current,
-                          age: Number(event.target.value || current.age)
-                        }))
-                      }
+                          age: Number(nextValue)
+                        }));
+                      }}
+                      onBlur={() => {
+                        if (ageInput !== "") {
+                          return;
+                        }
+
+                        setAgeInput(String(profile.age));
+                      }}
                     />
                   </label>
                   <label>
@@ -458,13 +733,26 @@ function App() {
                       type="number"
                       min={120}
                       max={230}
-                      value={profile.heightCm}
-                      onChange={(event) =>
+                      value={heightInput}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setHeightInput(nextValue);
+                        if (nextValue === "") {
+                          return;
+                        }
+
                         setProfile((current) => ({
                           ...current,
-                          heightCm: Number(event.target.value || current.heightCm)
-                        }))
-                      }
+                          heightCm: Number(nextValue)
+                        }));
+                      }}
+                      onBlur={() => {
+                        if (heightInput !== "") {
+                          return;
+                        }
+
+                        setHeightInput(String(profile.heightCm));
+                      }}
                     />
                   </label>
                   <label>
@@ -474,13 +762,26 @@ function App() {
                       min={35}
                       max={250}
                       step="0.1"
-                      value={profile.weightKg}
-                      onChange={(event) =>
+                      value={weightInput}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setWeightInput(nextValue);
+                        if (nextValue === "") {
+                          return;
+                        }
+
                         setProfile((current) => ({
                           ...current,
-                          weightKg: Number(event.target.value || current.weightKg)
-                        }))
-                      }
+                          weightKg: Number(nextValue)
+                        }));
+                      }}
+                      onBlur={() => {
+                        if (weightInput !== "") {
+                          return;
+                        }
+
+                        setWeightInput(String(profile.weightKg));
+                      }}
                     />
                   </label>
                   <label>
@@ -756,13 +1057,20 @@ function App() {
                 </strong>
               </div>
 
-              <button className="primary-button" type="submit" disabled={isGenerating}>
-                {isGenerating
-                  ? "Generating AI plan..."
-                  : saved
-                    ? "Save profile and regenerate"
-                    : "Save profile and build my day"}
-              </button>
+              <div className="action-stack">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={handleBuildWeekOnly}
+                  disabled={isGeneratingWeek}
+                >
+                  {isGeneratingWeek
+                    ? "Generating weekly plan..."
+                    : saved
+                      ? "Save profile and build 7-day plan"
+                      : "Save profile and build 7-day plan"}
+                </button>
+              </div>
             </form>
           ) : (
             <div className="profile-summary">
@@ -813,9 +1121,6 @@ function App() {
                 <strong>{profile.exclusions.length ? profile.exclusions.join(", ") : "none"}</strong>
               </div>
               <div className="action-stack">
-                <button className="primary-button" onClick={regeneratePlan} disabled={isGenerating}>
-                  {isGenerating ? "Generating AI plan..." : "Regenerate day plan"}
-                </button>
                 <button className="ghost-button" onClick={regenerateWeekPlan} disabled={isGeneratingWeek}>
                   {isGeneratingWeek ? "Generating weekly plan..." : "Build 7-day plan"}
                 </button>
@@ -830,7 +1135,7 @@ function App() {
               <p className="section-kicker">1-day plan</p>
               <h2>Your nutrition day</h2>
             </div>
-            {plan ? <span className="date-chip">{plan.date}</span> : null}
+            {activeDayPlan ? <span className="date-chip">{activeDayPlan.date}</span> : null}
           </div>
 
           {planError ? <div className="empty-state error-state">{planError}</div> : null}
@@ -841,37 +1146,37 @@ function App() {
             </div>
           ) : null}
 
-          {!plan && !planError && !isGenerating ? (
+          {!activeDayPlan && !planError && !isGenerating ? (
             <div className="empty-state">
               Save your profile to generate an AI-assisted day plan with gram-based portions, reminders, and groceries.
             </div>
           ) : null}
 
-          {plan && !isGenerating ? (
+          {activeDayPlan && !isGenerating ? (
             <>
               <div className="totals-grid">
                 <div className="metric-card">
                   <span>Calories</span>
-                  <strong>{plan.totals.calories}</strong>
+                  <strong>{activeDayPlan.totals.calories}</strong>
                 </div>
                 <div className="metric-card">
                   <span>Protein</span>
-                  <strong>{plan.totals.protein}g</strong>
+                  <strong>{activeDayPlan.totals.protein}g</strong>
                 </div>
                 <div className="metric-card">
                   <span>Carbs</span>
-                  <strong>{plan.totals.carbs}g</strong>
+                  <strong>{activeDayPlan.totals.carbs}g</strong>
                 </div>
                 <div className="metric-card">
                   <span>Fat</span>
-                  <strong>{plan.totals.fat}g</strong>
+                  <strong>{activeDayPlan.totals.fat}g</strong>
                 </div>
               </div>
 
-              <p className="planner-note">{plan.note}</p>
+              <p className="planner-note">{activeDayPlan.note}</p>
 
               <div className="meal-list">
-                {plan.meals.map((meal) => (
+                {activeDayPlan.meals.map((meal) => (
                   <details key={meal.id} className={`meal-card ${mealColorClass[meal.mealType]}`} open={meal.mealType === "breakfast"}>
                     <summary className="meal-summary">
                       <div className="meal-summary-copy">
@@ -1049,18 +1354,6 @@ function App() {
                   </details>
                 ))}
               </div>
-
-              <div className="section-block weekly-grocery-block">
-                <p className="subheading">Weekly groceries</p>
-                <ul className="grocery-list weekly-grocery-list">
-                  {weekPlan.groceryList.map((item) => (
-                    <li key={item.ingredientId}>
-                      <span>{item.ingredientName}</span>
-                      <strong>{item.totalQuantity}g</strong>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </>
           ) : null}
         </section>
@@ -1069,25 +1362,45 @@ function App() {
           <div className="panel-heading">
             <div>
               <p className="section-kicker">Reminder flow</p>
-              <h2>Prep and soak timing</h2>
+              <h2>Soak reminders</h2>
             </div>
           </div>
 
-          {plan?.reminders.length ? (
+          {groupedReminders.length ? (
             <div className="reminder-list">
-              {plan.reminders.map((reminder) => (
-                <article key={reminder.id} className={`reminder-card ${reminder.type}`}>
-                  <span className="reminder-tag">{reminder.type}</span>
-                  <h3>{reminder.title}</h3>
-                  <p>
-                    {formatContext(reminder.context)} for {reminder.linkedMealName}
-                    {reminder.linkedIngredientName ? ` • ${reminder.linkedIngredientName}` : ""}
-                  </p>
-                </article>
+              {groupedReminders.map((group) => (
+                <details
+                  key={group.date}
+                  className="reminder-day-card"
+                  open={group.date === new Date().toISOString().slice(0, 10)}
+                >
+                  <summary className="reminder-day-summary">
+                    <div>
+                      <p className="section-kicker">Soak day</p>
+                      <h3>{formatDisplayDate(group.date)}</h3>
+                    </div>
+                    <div className="week-day-meta">
+                      <strong>{group.items.length} item{group.items.length > 1 ? "s" : ""}</strong>
+                    </div>
+                  </summary>
+
+                  <div className="reminder-group-list">
+                    {group.items.map((reminder) => (
+                      <article key={reminder.id} className={`reminder-card ${reminder.type}`}>
+                        <span className="reminder-tag">{reminder.type}</span>
+                        <h3>{reminder.title}</h3>
+                        <p>
+                          For {formatDisplayDate(reminder.targetDate)} {reminder.linkedMealName}
+                          {reminder.linkedIngredientName ? ` • ${reminder.linkedIngredientName}` : ""}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                </details>
               ))}
             </div>
           ) : (
-            <div className="empty-state">Reminders will appear here once a day plan is generated.</div>
+            <div className="empty-state">Only meals that truly need overnight soaking will appear here.</div>
           )}
         </section>
 
@@ -1095,21 +1408,87 @@ function App() {
           <div className="panel-heading">
             <div>
               <p className="section-kicker">Shopping</p>
-              <h2>Grocery list</h2>
+              <h2>{weekPlan ? "Weekly grocery list" : "Grocery list"}</h2>
             </div>
+            {displayedGroceries.length ? (
+              <button className="ghost-button" type="button" onClick={clearCheckedGroceries}>
+                Reset checks
+              </button>
+            ) : null}
           </div>
 
-          {plan?.groceryList.length ? (
-            <ul className="grocery-list">
-              {plan.groceryList.map((item) => (
-                <li key={item.ingredientId}>
-                  <span>{item.ingredientName}</span>
-                  <strong>{item.totalQuantity}g</strong>
-                </li>
-              ))}
-            </ul>
+          {displayedGroceries.length ? (
+            <>
+              <p className="planner-note">
+                {weekPlan
+                  ? "Everything you need for your current 7-day plan, grouped for an easier shop."
+                  : "Your current grocery list, grouped for an easier shop."}
+              </p>
+
+              {groupedGroceries.fruits.length ? (
+                <div className="section-block grocery-section grocery-section-fruits">
+                  <p className="subheading">Fruits</p>
+                  <ul className="grocery-list weekly-grocery-list">
+                    {groupedGroceries.fruits.map((item) => (
+                      <li key={item.ingredientId}>
+                        <label className={checkedGroceries.includes(item.ingredientId) ? "grocery-check checked" : "grocery-check"}>
+                          <input
+                            type="checkbox"
+                            checked={checkedGroceries.includes(item.ingredientId)}
+                            onChange={() => toggleGroceryItem(item.ingredientId)}
+                          />
+                          <span>{item.ingredientName}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {groupedGroceries.vegetables.length ? (
+                <div className="section-block grocery-section grocery-section-vegetables">
+                  <p className="subheading">Vegetables</p>
+                  <ul className="grocery-list weekly-grocery-list">
+                    {groupedGroceries.vegetables.map((item) => (
+                      <li key={item.ingredientId}>
+                        <label className={checkedGroceries.includes(item.ingredientId) ? "grocery-check checked" : "grocery-check"}>
+                          <input
+                            type="checkbox"
+                            checked={checkedGroceries.includes(item.ingredientId)}
+                            onChange={() => toggleGroceryItem(item.ingredientId)}
+                          />
+                          <span>{item.ingredientName}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {groupedGroceries.dry_items.length ? (
+                <div className="section-block grocery-section grocery-section-dry">
+                  <p className="subheading">Dry items</p>
+                  <ul className="grocery-list weekly-grocery-list">
+                    {groupedGroceries.dry_items.map((item) => (
+                      <li key={item.ingredientId}>
+                        <label className={checkedGroceries.includes(item.ingredientId) ? "grocery-check checked" : "grocery-check"}>
+                          <input
+                            type="checkbox"
+                            checked={checkedGroceries.includes(item.ingredientId)}
+                            onChange={() => toggleGroceryItem(item.ingredientId)}
+                          />
+                          <span>{item.ingredientName}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </>
           ) : (
-            <div className="empty-state">Your daily grocery list will be built from the generated day.</div>
+            <div className="empty-state">
+              Generate a day or week plan and your grocery list will appear here.
+            </div>
           )}
         </section>
       </main>

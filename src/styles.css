@@ -42,18 +42,26 @@ select {
   position: sticky;
   top: 10px;
   z-index: 5;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   gap: 8px;
   padding: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(16, 33, 22, 0.08);
   backdrop-filter: blur(14px);
 }
 
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .tab-button {
   min-height: 42px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0 16px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -390,6 +398,32 @@ select {
   margin: 0 0 8px;
 }
 
+.reminder-day-card {
+  border-radius: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(16, 33, 22, 0.08);
+}
+
+.reminder-day-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  cursor: pointer;
+  list-style: none;
+}
+
+.reminder-day-summary::-webkit-details-marker {
+  display: none;
+}
+
+.reminder-group-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
 .meal-summary-copy {
   display: grid;
   gap: 4px;
@@ -445,6 +479,22 @@ select {
   margin-top: 0;
 }
 
+.grocery-section {
+  border: 1px solid rgba(16, 33, 22, 0.08);
+}
+
+.grocery-section-fruits {
+  background: linear-gradient(180deg, rgba(255, 235, 216, 0.95), rgba(255, 246, 238, 0.98));
+}
+
+.grocery-section-vegetables {
+  background: linear-gradient(180deg, rgba(228, 243, 222, 0.95), rgba(242, 249, 239, 0.98));
+}
+
+.grocery-section-dry {
+  background: linear-gradient(180deg, rgba(241, 233, 211, 0.95), rgba(249, 244, 232, 0.98));
+}
+
 .macro-badge {
   padding: 12px;
   border-radius: 16px;
@@ -469,6 +519,26 @@ select {
 .grocery-list li {
   padding-top: 10px;
   border-top: 1px solid rgba(16, 33, 22, 0.08);
+}
+
+.grocery-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.grocery-check input {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.grocery-check.checked span {
+  text-decoration: line-through;
+  color: #728576;
 }
 
 .meal-breakfast {

@@ -102,6 +102,8 @@ export interface Reminder {
   type: ReminderType;
   title: string;
   context: ReminderContext;
+  soakOnDate?: string;
+  targetDate: string;
   linkedMealId: string;
   linkedMealName: string;
   linkedIngredientId?: string;
