@@ -10,11 +10,11 @@ export const API_BASE_URL = (
 
 export const tabs = [
   { id: "profile", label: "Profile", accent: "amber" },
-  { id: "day", label: "Day", accent: "gold" },
+  { id: "day", label: "Today", accent: "gold" },
   { id: "week", label: "Week", accent: "leaf" },
   { id: "family", label: "Family", accent: "rose" },
-  { id: "reminders", label: "Reminders", accent: "ink" },
-  { id: "groceries", label: "Groceries", accent: "sand" }
+  { id: "reminders", label: "Soak", accent: "ink" },
+  { id: "groceries", label: "Shop", accent: "sand" }
 ] as const;
 
 export type TabId = (typeof tabs)[number]["id"];

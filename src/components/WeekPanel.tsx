@@ -61,7 +61,7 @@ export default function WeekPanel({
 
           <div className="week-list">
             {weekPlan.days.map((day) => (
-              <details key={day.date} className="week-day-card" open={day.date === weekPlan.startDate}>
+              <details key={day.date} className="week-day-card">
                 <summary className="week-day-summary">
                   <div>
                     <p className="section-kicker">Day</p>

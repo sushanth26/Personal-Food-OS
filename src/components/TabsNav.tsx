@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { TabId, tabs } from "../lib/appConfig";
 import AppIcon from "./AppIcon";
 
@@ -6,9 +6,17 @@ type TabsNavProps = {
   activeTab: TabId;
   onChange: (tab: TabId) => void;
   showProfileTab?: boolean;
+  className?: string;
+  trailingContent?: ReactNode;
 };
 
-export default function TabsNav({ activeTab, onChange, showProfileTab = true }: TabsNavProps) {
+export default function TabsNav({
+  activeTab,
+  onChange,
+  showProfileTab = true,
+  className = "",
+  trailingContent
+}: TabsNavProps) {
   const visibleTabs = showProfileTab ? tabs : tabs.filter((tab) => tab.id !== "profile");
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
@@ -26,7 +34,7 @@ export default function TabsNav({ activeTab, onChange, showProfileTab = true }: 
   }, [activeTab]);
 
   return (
-    <nav className="tabs" aria-label="Primary sections">
+    <nav className={className ? `tabs ${className}` : "tabs"} aria-label="Primary sections">
       {visibleTabs.map((tab) => (
         <button
           key={tab.id}
@@ -43,6 +51,7 @@ export default function TabsNav({ activeTab, onChange, showProfileTab = true }: 
           </span>
         </button>
       ))}
+      {trailingContent}
     </nav>
   );
 }
