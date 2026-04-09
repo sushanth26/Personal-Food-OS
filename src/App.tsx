@@ -19,7 +19,15 @@ import {
   groupGroceryItems,
   groupRemindersBySoakDate
 } from "./lib/foodUtils";
-import { deriveMacroTargets, estimateDailyCalories } from "./planner";
+import {
+  calculateBmi,
+  cmToFeetInches,
+  deriveMacroTargets,
+  estimateDailyCalories,
+  feetInchesToCm,
+  kgToLb,
+  lbToKg
+} from "./planner";
 import {
   clearStoredAppState,
   loadCheckedGroceries,
@@ -36,6 +44,111 @@ function hasLegacyGroceryItems(items: DailyMealPlan["groceryList"]) {
   return items.some((item) => !item.category || !item.canonicalName);
 }
 
+function getHeightInputs(heightCm: number) {
+  const { feet, inches } = cmToFeetInches(heightCm);
+  return {
+    heightFeetInput: String(feet),
+    heightInchesInput: String(Math.round(inches))
+  };
+}
+
+function getWeightInput(weightKg: number, weightUnit: NutritionProfile["weightUnit"]) {
+  return String(weightUnit === "kg" ? Math.round(weightKg * 10) / 10 : kgToLb(weightKg));
+}
+
+function normalizeProfile(profile: NutritionProfile): NutritionProfile {
+  return {
+    ...profile,
+    heightUnit: "ft_in"
+  };
+}
+
+function buildCanonicalProfileFromInputs(
+  profile: NutritionProfile,
+  inputs: {
+    calorieInput: string;
+    ageInput: string;
+    heightFeetInput: string;
+    heightInchesInput: string;
+    weightInput: string;
+  }
+): NutritionProfile {
+  const nextCalorieTarget = inputs.calorieInput === "" ? profile.calorieTarget : Number(inputs.calorieInput);
+  const nextAge = inputs.ageInput === "" ? profile.age : Number(inputs.ageInput);
+  const nextHeightCm = feetInchesToCm(Number(inputs.heightFeetInput || 0), Number(inputs.heightInchesInput || 0));
+  const nextWeightKg =
+    inputs.weightInput === ""
+      ? profile.weightKg
+      : profile.weightUnit === "kg"
+        ? Number(inputs.weightInput)
+        : lbToKg(Number(inputs.weightInput));
+
+  return normalizeProfile({
+    ...profile,
+    calorieTarget: nextCalorieTarget,
+    age: nextAge,
+    heightCm: nextHeightCm,
+    weightKg: nextWeightKg
+  });
+}
+
+function formatHeight(profile: NutritionProfile) {
+  if (profile.heightUnit === "ft_in") {
+    const { feet, inches } = cmToFeetInches(profile.heightCm);
+    return `${feet}ft ${Math.round(inches * 10) / 10}in`;
+  }
+
+  return `${Math.round(profile.heightCm * 10) / 10} cm`;
+}
+
+function formatWeight(profile: NutritionProfile) {
+  if (profile.weightUnit === "lb") {
+    return `${kgToLb(profile.weightKg)} lb`;
+  }
+
+  return `${Math.round(profile.weightKg * 10) / 10} kg`;
+}
+
+function getServerProfile(profile: NutritionProfile) {
+  const {
+    calorieTarget,
+    sex,
+    age,
+    heightCm,
+    weightKg,
+    activityLevel,
+    goal,
+    cuisinePreference,
+    macroMode,
+    macroPreset,
+    macroTargets,
+    dietaryPattern,
+    exclusions,
+    mealsPerDay,
+    prepPreference,
+    allowRepeats
+  } = profile;
+
+  return {
+    calorieTarget,
+    sex,
+    age,
+    heightCm,
+    weightKg,
+    activityLevel,
+    goal,
+    cuisinePreference,
+    macroMode,
+    macroPreset,
+    macroTargets,
+    dietaryPattern,
+    exclusions,
+    mealsPerDay,
+    prepPreference,
+    allowRepeats
+  };
+}
+
 function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -43,8 +156,9 @@ function App() {
   const [profile, setProfile] = useState<NutritionProfile>(defaultProfile);
   const [calorieInput, setCalorieInput] = useState(String(defaultProfile.calorieTarget));
   const [ageInput, setAgeInput] = useState(String(defaultProfile.age));
-  const [heightInput, setHeightInput] = useState(String(defaultProfile.heightCm));
-  const [weightInput, setWeightInput] = useState(String(defaultProfile.weightKg));
+  const [heightFeetInput, setHeightFeetInput] = useState(String(cmToFeetInches(defaultProfile.heightCm).feet));
+  const [heightInchesInput, setHeightInchesInput] = useState(String(Math.round(cmToFeetInches(defaultProfile.heightCm).inches)));
+  const [weightInput, setWeightInput] = useState(getWeightInput(defaultProfile.weightKg, defaultProfile.weightUnit));
   const [saved, setSaved] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -71,8 +185,9 @@ function App() {
         setProfile(defaultProfile);
         setCalorieInput(String(defaultProfile.calorieTarget));
         setAgeInput(String(defaultProfile.age));
-        setHeightInput(String(defaultProfile.heightCm));
-        setWeightInput(String(defaultProfile.weightKg));
+        setHeightFeetInput(getHeightInputs(defaultProfile.heightCm).heightFeetInput);
+        setHeightInchesInput(getHeightInputs(defaultProfile.heightCm).heightInchesInput);
+        setWeightInput(getWeightInput(defaultProfile.weightKg, defaultProfile.weightUnit));
         setSaved(false);
         setEditingProfile(false);
         setPlan(null);
@@ -90,15 +205,16 @@ function App() {
       try {
         const cloudState = await loadCloudFoodState(nextUser.uid);
 
-        const nextProfile = cloudState.profile ?? defaultProfile;
+        const nextProfile = normalizeProfile({ ...defaultProfile, ...cloudState.profile });
         const nextPlan = cloudState.plan;
         const nextWeekPlan = cloudState.weekPlan;
 
         setProfile(nextProfile);
         setCalorieInput(String(nextProfile.calorieTarget));
         setAgeInput(String(nextProfile.age));
-        setHeightInput(String(nextProfile.heightCm));
-        setWeightInput(String(nextProfile.weightKg));
+        setHeightFeetInput(getHeightInputs(nextProfile.heightCm).heightFeetInput);
+        setHeightInchesInput(getHeightInputs(nextProfile.heightCm).heightInchesInput);
+        setWeightInput(getWeightInput(nextProfile.weightKg, nextProfile.weightUnit));
         setPlan(nextPlan);
         setWeekPlan(nextWeekPlan);
         setCheckedGroceries([]);
@@ -162,6 +278,9 @@ function App() {
     profile.macroMode === "split"
       ? deriveMacroTargets(profile.calorieTarget, "split", profile.macroPreset)
       : profile.macroTargets;
+  const bmi = useMemo(() => calculateBmi(profile.heightCm, profile.weightKg), [profile.heightCm, profile.weightKg]);
+  const formattedHeight = useMemo(() => formatHeight(profile), [profile]);
+  const formattedWeight = useMemo(() => formatWeight(profile), [profile]);
 
   const todayDate = getTodayDate();
   const activeDayPlan = weekPlan?.days.find((day) => day.date === todayDate) ?? plan;
@@ -266,13 +385,20 @@ function App() {
   }
 
   function persistProfile() {
+    const canonicalProfile = buildCanonicalProfileFromInputs(profile, {
+      calorieInput,
+      ageInput,
+      heightFeetInput,
+      heightInchesInput,
+      weightInput
+    });
     const nextProfile =
-      profile.macroMode === "split"
+      canonicalProfile.macroMode === "split"
         ? {
-            ...profile,
-            macroTargets: deriveMacroTargets(profile.calorieTarget, "split", profile.macroPreset)
+            ...canonicalProfile,
+            macroTargets: deriveMacroTargets(canonicalProfile.calorieTarget, "split", canonicalProfile.macroPreset)
           }
-        : profile;
+        : canonicalProfile;
 
     saveProfile(nextProfile);
     if (authUser) {
@@ -284,8 +410,9 @@ function App() {
     setProfile(nextProfile);
     setCalorieInput(String(nextProfile.calorieTarget));
     setAgeInput(String(nextProfile.age));
-    setHeightInput(String(nextProfile.heightCm));
-    setWeightInput(String(nextProfile.weightKg));
+    setHeightFeetInput(getHeightInputs(nextProfile.heightCm).heightFeetInput);
+    setHeightInchesInput(getHeightInputs(nextProfile.heightCm).heightInchesInput);
+    setWeightInput(getWeightInput(nextProfile.weightKg, nextProfile.weightUnit));
     setSaved(true);
     setEditingProfile(false);
     void logAnalyticsEvent("profile_saved", {
@@ -343,13 +470,13 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/meal-plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile: nextProfile, date })
+        body: JSON.stringify({ profile: getServerProfile(nextProfile), date })
       });
 
       const raw = await response.text();
       const payload = raw ? (JSON.parse(raw) as { plan?: DailyMealPlan; error?: string }) : {};
       if (!response.ok || !payload.plan) {
-        throw new Error(payload.error ?? "Unable to generate an AI plan right now.");
+        throw new Error(payload.error ?? "Unable to generate a plan right now.");
       }
 
       setPlan(payload.plan);
@@ -367,7 +494,7 @@ function App() {
       return payload.plan;
     } catch (error) {
       setPlan(null);
-      setPlanError(error instanceof Error ? error.message : "Unable to generate an AI plan right now.");
+      setPlanError(error instanceof Error ? error.message : "Unable to generate a plan right now.");
       void logAnalyticsEvent("day_plan_failed", { date });
       return null;
     } finally {
@@ -395,7 +522,7 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          profile: nextProfile,
+          profile: getServerProfile(nextProfile),
           startDate: getWeekStartDate()
         })
       });
@@ -403,7 +530,7 @@ function App() {
       const raw = await response.text();
       const payload = raw ? (JSON.parse(raw) as { weekPlan?: WeeklyMealPlan; error?: string }) : {};
       if (!response.ok || !payload.weekPlan) {
-        throw new Error(payload.error ?? "Unable to generate a weekly AI plan right now.");
+        throw new Error(payload.error ?? "Unable to generate a weekly plan right now.");
       }
 
       setWeekPlan(payload.weekPlan);
@@ -425,7 +552,7 @@ function App() {
       });
     } catch (error) {
       setWeekPlan(null);
-      setWeekError(error instanceof Error ? error.message : "Unable to generate a weekly AI plan right now.");
+      setWeekError(error instanceof Error ? error.message : "Unable to generate a weekly plan right now.");
       void logAnalyticsEvent("week_plan_failed", {
         start_date: getWeekStartDate()
       });
@@ -441,7 +568,17 @@ function App() {
   }
 
   async function regenerateWeekPlan() {
-    await requestWeekPlan(updateDerivedTargets(profile));
+    await requestWeekPlan(
+      updateDerivedTargets(
+        buildCanonicalProfileFromInputs(profile, {
+          calorieInput,
+          ageInput,
+          heightFeetInput,
+          heightInchesInput,
+          weightInput
+        })
+      )
+    );
   }
 
   async function regenerateWeekDay(date: string) {
@@ -454,7 +591,18 @@ function App() {
     setActiveTab("week");
 
     try {
-      const refreshedPlan = await requestMealPlan(updateDerivedTargets(profile), date);
+      const refreshedPlan = await requestMealPlan(
+        updateDerivedTargets(
+          buildCanonicalProfileFromInputs(profile, {
+            calorieInput,
+            ageInput,
+            heightFeetInput,
+            heightInchesInput,
+            weightInput
+          })
+        ),
+        date
+      );
       if (!refreshedPlan) {
         throw new Error("Unable to refresh this day right now.");
       }
@@ -489,8 +637,9 @@ function App() {
     setProfile(defaultProfile);
     setCalorieInput(String(defaultProfile.calorieTarget));
     setAgeInput(String(defaultProfile.age));
-    setHeightInput(String(defaultProfile.heightCm));
-    setWeightInput(String(defaultProfile.weightKg));
+    setHeightFeetInput(getHeightInputs(defaultProfile.heightCm).heightFeetInput);
+    setHeightInchesInput(getHeightInputs(defaultProfile.heightCm).heightInchesInput);
+    setWeightInput(getWeightInput(defaultProfile.weightKg, defaultProfile.weightUnit));
     setSaved(false);
     setEditingProfile(false);
     setPlan(null);
@@ -552,10 +701,14 @@ function App() {
             exclusionOptions={exclusionOptions}
             estimatedCalories={estimatedCalories}
             displayedTargets={displayedTargets}
+            bmi={bmi}
             calorieInput={calorieInput}
             ageInput={ageInput}
-            heightInput={heightInput}
+            heightFeetInput={heightFeetInput}
+            heightInchesInput={heightInchesInput}
             weightInput={weightInput}
+            formattedHeight={formattedHeight}
+            formattedWeight={formattedWeight}
             isGeneratingWeek={isGeneratingWeek}
             authUser={authUser}
             accountLabel={accountLabel}
@@ -582,26 +735,39 @@ function App() {
                 setAgeInput(String(profile.age));
               }
             }}
-            onHeightInputChange={(value) => {
-              setHeightInput(value);
-              if (value !== "") {
-                setProfile((current) => ({ ...current, heightCm: Number(value) }));
-              }
+            onHeightFeetInputChange={(value) => {
+              setHeightFeetInput(value);
+              const feet = Number(value || 0);
+              const inches = Number(heightInchesInput || 0);
+              setProfile((current) => ({ ...current, heightCm: feetInchesToCm(feet, inches) }));
             }}
-            onHeightInputBlur={() => {
-              if (heightInput === "") {
-                setHeightInput(String(profile.heightCm));
-              }
+            onHeightInchesInputChange={(value) => {
+              setHeightInchesInput(value);
+              const feet = Number(heightFeetInput || 0);
+              const inches = Number(value || 0);
+              setProfile((current) => ({ ...current, heightCm: feetInchesToCm(feet, inches) }));
+            }}
+            onHeightImperialBlur={() => {
+              const nextHeightInputs = getHeightInputs(profile.heightCm);
+              setHeightFeetInput(nextHeightInputs.heightFeetInput);
+              setHeightInchesInput(nextHeightInputs.heightInchesInput);
+            }}
+            onWeightUnitChange={(unit) => {
+              setProfile((current) => ({ ...current, weightUnit: unit }));
+              setWeightInput(getWeightInput(profile.weightKg, unit));
             }}
             onWeightInputChange={(value) => {
               setWeightInput(value);
               if (value !== "") {
-                setProfile((current) => ({ ...current, weightKg: Number(value) }));
+                setProfile((current) => ({
+                  ...current,
+                  weightKg: current.weightUnit === "kg" ? Number(value) : lbToKg(Number(value))
+                }));
               }
             }}
             onWeightInputBlur={() => {
               if (weightInput === "") {
-                setWeightInput(String(profile.weightKg));
+                setWeightInput(getWeightInput(profile.weightKg, profile.weightUnit));
               }
             }}
             onProfileChange={updateProfile}

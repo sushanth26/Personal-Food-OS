@@ -10,6 +10,8 @@ export type BiologicalSex = "female" | "male";
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active";
 export type Goal = "lose" | "maintain" | "gain";
 export type CuisinePreference = "indian" | "mediterranean" | "american" | "east_asian";
+export type HeightUnit = "ft_in";
+export type WeightUnit = "kg" | "lb";
 
 export interface MacroTargets {
   protein: number;
@@ -22,7 +24,9 @@ export interface NutritionProfile {
   sex: BiologicalSex;
   age: number;
   heightCm: number;
+  heightUnit: HeightUnit;
   weightKg: number;
+  weightUnit: WeightUnit;
   activityLevel: ActivityLevel;
   goal: Goal;
   cuisinePreference: CuisinePreference;
