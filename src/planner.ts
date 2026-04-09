@@ -29,6 +29,34 @@ function round(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+export function calculateBmi(heightCm: number, weightKg: number): number {
+  const heightM = heightCm / 100;
+  if (!heightM || !weightKg) {
+    return 0;
+  }
+
+  return round(weightKg / (heightM * heightM));
+}
+
+export function kgToLb(weightKg: number): number {
+  return round(weightKg * 2.20462);
+}
+
+export function lbToKg(weightLb: number): number {
+  return round(weightLb / 2.20462);
+}
+
+export function cmToFeetInches(heightCm: number): { feet: number; inches: number } {
+  const totalInches = heightCm / 2.54;
+  const feet = Math.floor(totalInches / 12);
+  const inches = round(totalInches - feet * 12);
+  return { feet, inches };
+}
+
+export function feetInchesToCm(feet: number, inches: number): number {
+  return Math.round((feet * 12 + inches) * 2.54 * 10) / 10;
+}
+
 export function estimateDailyCalories(
   profile: Pick<
     NutritionProfile,

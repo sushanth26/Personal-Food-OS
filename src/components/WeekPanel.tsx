@@ -1,7 +1,6 @@
 import { RecipeVideo, WeeklyMealPlan } from "../types";
-import { mealColorClass } from "../lib/appConfig";
-import { formatDisplayDate, getMealBalanceSummary, getMealServingDisplay } from "../lib/foodUtils";
-import AppIcon from "./AppIcon";
+import { formatDisplayDate } from "../lib/foodUtils";
+import MealCard from "./MealCard";
 import PanelHero from "./PanelHero";
 
 type WeekPanelProps = {
@@ -37,7 +36,15 @@ export default function WeekPanel({
         tone="week"
         kicker="Weekly arc"
         title="See the whole rhythm before the week begins"
-        chips={weekPlan ? [`${weekPlan.days.length} days`, "regenerate by day", "shared grocery flow"] : ["week builder", "variety-aware", "leftover-friendly"]}
+        chips={
+          weekPlan
+            ? [
+                `${weekPlan.days.length} days`,
+                `${Math.round(weekPlan.totals.calories / weekPlan.days.length)} kcal / day`,
+                `${Math.round(weekPlan.totals.protein / weekPlan.days.length)}P / ${Math.round(weekPlan.totals.carbs / weekPlan.days.length)}C / ${Math.round(weekPlan.totals.fat / weekPlan.days.length)}F`
+              ]
+            : ["week builder", "variety-aware", "leftover-friendly"]
+        }
       />
 
       {weekError ? <div className="empty-state error-state">{weekError}</div> : null}
@@ -60,85 +67,60 @@ export default function WeekPanel({
           <p className="planner-note">{weekPlan.note}</p>
 
           <div className="week-list">
-            {weekPlan.days.map((day) => (
-              <details key={day.date} className="week-day-card">
-                <summary className="week-day-summary">
-                  <div>
-                    <p className="section-kicker">Day</p>
-                    <h3>{formatDisplayDate(day.date)}</h3>
-                    <p className="portion-copy">{day.meals.map((meal) => meal.name).join(" • ")}</p>
-                  </div>
-                  <div className="week-day-meta">
-                    <strong>{day.totals.calories} kcal</strong>
-                    <span>
-                      {day.totals.protein}P / {day.totals.carbs}C / {day.totals.fat}F
-                    </span>
-                  </div>
-                </summary>
+            {weekPlan.days.map((day) => {
+              const breakfast = day.meals.find((meal) => meal.mealType === "breakfast");
+              const lunch = day.meals.find((meal) => meal.mealType === "lunch");
+              const dinner = day.meals.find((meal) => meal.mealType === "dinner");
+              const snack = day.meals.find((meal) => meal.mealType === "snack");
 
-                <div className="week-day-actions">
-                  <button className="ghost-button" onClick={() => onRegenerateDay(day.date)} disabled={isGeneratingWeek}>
-                    Refresh this day
-                  </button>
-                </div>
+              return (
+                <details key={day.date} className="week-day-card">
+                  <summary className="week-day-summary">
+                    <div className="week-day-summary-copy">
+                      <h3>{formatDisplayDate(day.date)}</h3>
+                      <div className="week-meal-outline">
+                        {breakfast ? (
+                          <div className="week-meal-outline-row">
+                            <span>Breakfast</span>
+                            <strong>{breakfast.name}</strong>
+                          </div>
+                        ) : null}
+                        {lunch ? (
+                          <div className="week-meal-outline-row">
+                            <span>Lunch</span>
+                            <strong>{lunch.name}</strong>
+                          </div>
+                        ) : null}
+                        {dinner ? (
+                          <div className="week-meal-outline-row">
+                            <span>Dinner</span>
+                            <strong>{dinner.name}</strong>
+                          </div>
+                        ) : null}
+                        {snack ? (
+                          <div className="week-meal-outline-row">
+                            <span>Snack</span>
+                            <strong>{snack.name}</strong>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </summary>
+
+                  <div className="week-day-actions">
+                    <button className="ghost-button" onClick={() => onRegenerateDay(day.date)} disabled={isGeneratingWeek}>
+                      Refresh this day
+                    </button>
+                  </div>
 
                   <div className="week-meal-grid">
-                  {day.meals.map((meal) => {
-                    const servingDisplay = getMealServingDisplay(meal);
-                    const balanceSummary = getMealBalanceSummary(meal);
-                    return (
-                      <article key={meal.id} className={`mini-meal-card ${mealColorClass[meal.mealType]}`}>
-                        <div className="mini-meal-topline">
-                          <p className="meal-type">{meal.mealType}</p>
-                          <span className="mini-meal-kcal">{meal.totalCalories} kcal</span>
-                        </div>
-                        <h4>{meal.name}</h4>
-                        <div className="mini-meal-amount">
-                          <span>Eat</span>
-                          <strong>{servingDisplay.primary}</strong>
-                        </div>
-                        <div className="meal-balance-row mini-balance-row">
-                          <AppIcon name="balance" className="balance-icon" />
-                          <span className="meal-balance-chip">{balanceSummary.label}</span>
-                        </div>
-                        {servingDisplay.secondary ? (
-                          <p className="portion-copy mini-meal-copy">{servingDisplay.secondary}</p>
-                        ) : null}
-                        {servingDisplay.detail ? (
-                          <p className="portion-copy mini-meal-detail">{servingDisplay.detail}</p>
-                        ) : null}
-                        <div className="video-card mini-video-card">
-                          <span className="video-title-row">
-                            <AppIcon name="spark" className="video-title-icon" />
-                            <span>Top recipe video</span>
-                          </span>
-                          {mealVideos[meal.id] ? (
-                            <a className="video-link" href={mealVideos[meal.id]!.url} target="_blank" rel="noreferrer">
-                              {mealVideos[meal.id]!.thumbnailUrl ? (
-                                <img
-                                  className="video-thumb"
-                                  src={mealVideos[meal.id]!.thumbnailUrl}
-                                  alt={mealVideos[meal.id]!.title}
-                                />
-                              ) : null}
-                              <div className="video-copy">
-                                <strong>{mealVideos[meal.id]!.title}</strong>
-                                <p>
-                                  {mealVideos[meal.id]!.channelName}
-                                  {mealVideos[meal.id]!.duration ? ` • ${mealVideos[meal.id]!.duration}` : ""}
-                                </p>
-                              </div>
-                            </a>
-                          ) : (
-                            <p className="portion-copy">Finding the best recipe video for this meal...</p>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </details>
-            ))}
+                    {day.meals.map((meal) => (
+                      <MealCard key={meal.id} meal={meal} video={mealVideos[meal.id]} />
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         </>
       ) : null}

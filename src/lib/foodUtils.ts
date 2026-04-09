@@ -288,6 +288,6 @@ export function buildWeeklyPlanFromDays(startDate: string, days: DailyMealPlan[]
     days,
     totals,
     groceryList: aggregateWeeklyGroceryList(days),
-    note: "AI-generated weekly plan with day-by-day meals and one combined grocery list."
+    note: "Weekly plan with day-by-day meals and one combined grocery list."
   };
 }

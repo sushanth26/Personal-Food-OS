@@ -1,7 +1,13 @@
 import express from "express";
 import path from "node:path";
 import { findRecipeVideo } from "./video.mjs";
-import { generateDailyPlan, generateWeeklyPlan, normalizeGroceriesWithAI } from "./planner.mjs";
+import {
+  generateDailyPlan,
+  generateFallbackDailyPlan,
+  generateFallbackWeeklyPlan,
+  generateWeeklyPlan,
+  normalizeGroceriesWithAI
+} from "./planner.mjs";
 import { client } from "./xaiClient.mjs";
 
 export function createApp(distDir) {
@@ -25,56 +31,50 @@ export function createApp(distDir) {
   });
 
   app.post("/api/meal-plan", async (req, res) => {
-    if (!client) {
-      return res.status(500).json({
-        error: "XAI_API_KEY is not set on the server, so Grok meal plans cannot be generated yet."
-      });
-    }
-
     try {
       const { profile, date } = req.body ?? {};
       if (!profile || !date) {
         return res.status(400).json({ error: "Missing profile or date." });
       }
 
+      if (!client) {
+        return res.json({ plan: generateFallbackDailyPlan(profile, date), fallback: true });
+      }
+
       const plan = await generateDailyPlan(profile, date);
       return res.json({ plan });
     } catch (error) {
       console.error("meal-plan error", error);
-      const message =
-        error instanceof Error && /timeout/i.test(error.message)
-          ? "The AI planner took too long. Please try again."
-          : error instanceof Error
-            ? error.message
-            : "The AI planner failed to generate a valid meal plan.";
-      return res.status(500).json({ error: message });
+      const { profile, date } = req.body ?? {};
+      if (!profile || !date) {
+        return res.status(400).json({ error: "Missing profile or date." });
+      }
+
+      return res.json({ plan: generateFallbackDailyPlan(profile, date), fallback: true });
     }
   });
 
   app.post("/api/weekly-meal-plan", async (req, res) => {
-    if (!client) {
-      return res.status(500).json({
-        error: "XAI_API_KEY is not set on the server, so Grok meal plans cannot be generated yet."
-      });
-    }
-
     try {
       const { profile, startDate } = req.body ?? {};
       if (!profile || !startDate) {
         return res.status(400).json({ error: "Missing profile or startDate." });
       }
 
+      if (!client) {
+        return res.json({ weekPlan: generateFallbackWeeklyPlan(profile, startDate), fallback: true });
+      }
+
       const weekPlan = await generateWeeklyPlan(profile, startDate);
       return res.json({ weekPlan });
     } catch (error) {
       console.error("weekly-meal-plan error", error);
-      const message =
-        error instanceof Error && /timeout/i.test(error.message)
-          ? "The weekly AI planner took too long. Please try again."
-          : error instanceof Error
-            ? error.message
-            : "The AI planner failed to generate a valid weekly meal plan.";
-      return res.status(500).json({ error: message });
+      const { profile, startDate } = req.body ?? {};
+      if (!profile || !startDate) {
+        return res.status(400).json({ error: "Missing profile or startDate." });
+      }
+
+      return res.json({ weekPlan: generateFallbackWeeklyPlan(profile, startDate), fallback: true });
     }
   });
 

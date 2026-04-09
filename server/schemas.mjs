@@ -10,14 +10,14 @@ export const aiMealPlanSchema = z.object({
         primary: z.string(),
         secondary: z.string().optional()
       }),
-      totalCalories: z.number(),
-      totalProtein: z.number(),
-      totalCarbs: z.number(),
-      totalFat: z.number(),
+      totalCalories: z.number().nonnegative(),
+      totalProtein: z.number().nonnegative(),
+      totalCarbs: z.number().nonnegative(),
+      totalFat: z.number().nonnegative(),
       ingredients: z.array(
         z.object({
           ingredientName: z.string(),
-          quantity: z.number(),
+          quantity: z.number().positive(),
           unit: z.literal("g")
         })
       )

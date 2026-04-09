@@ -9,7 +9,8 @@ import {
   MacroMode,
   MacroPreset,
   NutritionProfile,
-  PrepPreference
+  PrepPreference,
+  WeightUnit
 } from "../types";
 import PanelHero from "./PanelHero";
 
@@ -22,18 +23,24 @@ type ProfilePanelProps = {
   exclusionOptions: Exclusion[];
   estimatedCalories: number;
   displayedTargets: NutritionProfile["macroTargets"];
+  bmi: number;
   calorieInput: string;
   ageInput: string;
-  heightInput: string;
+  heightFeetInput: string;
+  heightInchesInput: string;
   weightInput: string;
+  formattedHeight: string;
+  formattedWeight: string;
   isGeneratingWeek: boolean;
   onSyncCalculatedCalories: () => void;
   onCalorieInputChange: (value: string) => void;
   onCalorieInputBlur: () => void;
   onAgeInputChange: (value: string) => void;
   onAgeInputBlur: () => void;
-  onHeightInputChange: (value: string) => void;
-  onHeightInputBlur: () => void;
+  onHeightFeetInputChange: (value: string) => void;
+  onHeightInchesInputChange: (value: string) => void;
+  onHeightImperialBlur: () => void;
+  onWeightUnitChange: (unit: WeightUnit) => void;
   onWeightInputChange: (value: string) => void;
   onWeightInputBlur: () => void;
   onProfileChange: (updater: (current: NutritionProfile) => NutritionProfile) => void;
@@ -51,18 +58,24 @@ export default function ProfilePanel({
   exclusionOptions,
   estimatedCalories,
   displayedTargets,
+  bmi,
   calorieInput,
   ageInput,
-  heightInput,
+  heightFeetInput,
+  heightInchesInput,
   weightInput,
+  formattedHeight,
+  formattedWeight,
   isGeneratingWeek,
   onSyncCalculatedCalories,
   onCalorieInputChange,
   onCalorieInputBlur,
   onAgeInputChange,
   onAgeInputBlur,
-  onHeightInputChange,
-  onHeightInputBlur,
+  onHeightFeetInputChange,
+  onHeightInchesInputChange,
+  onHeightImperialBlur,
+  onWeightUnitChange,
   onWeightInputChange,
   onWeightInputBlur,
   onProfileChange,
@@ -126,27 +139,50 @@ export default function ProfilePanel({
                 />
               </label>
               <label>
-                Height (cm)
-                <input
-                  type="number"
-                  min={120}
-                  max={230}
-                  value={heightInput}
-                  onChange={(event) => onHeightInputChange(event.target.value)}
-                  onBlur={onHeightInputBlur}
-                />
+                Height
+                <div className="split-fields unit-split-fields">
+                  <label>
+                    Feet
+                    <select value={heightFeetInput} onChange={(event) => onHeightFeetInputChange(event.target.value)} onBlur={onHeightImperialBlur}>
+                      <option value="4">4 ft</option>
+                      <option value="5">5 ft</option>
+                      <option value="6">6 ft</option>
+                      <option value="7">7 ft</option>
+                    </select>
+                  </label>
+                  <label>
+                    Inches
+                    <select value={heightInchesInput} onChange={(event) => onHeightInchesInputChange(event.target.value)} onBlur={onHeightImperialBlur}>
+                      {Array.from({ length: 12 }, (_, value) => (
+                        <option key={value} value={String(value)}>
+                          {value} in
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               </label>
               <label>
-                Weight (kg)
-                <input
-                  type="number"
-                  min={35}
-                  max={250}
-                  step="0.1"
-                  value={weightInput}
-                  onChange={(event) => onWeightInputChange(event.target.value)}
-                  onBlur={onWeightInputBlur}
-                />
+                Weight
+                <div className="weight-field">
+                  <input
+                    type="number"
+                    min={profile.weightUnit === "kg" ? 35 : 77}
+                    max={profile.weightUnit === "kg" ? 250 : 550}
+                    step="0.1"
+                    value={weightInput}
+                    onChange={(event) => onWeightInputChange(event.target.value)}
+                    onBlur={onWeightInputBlur}
+                  />
+                  <select
+                    className="weight-unit-select"
+                    value={profile.weightUnit}
+                    onChange={(event) => onWeightUnitChange(event.target.value as WeightUnit)}
+                  >
+                    <option value="kg">kg</option>
+                    <option value="lb">lb</option>
+                  </select>
+                </div>
               </label>
               <label>
                 Activity
@@ -186,6 +222,10 @@ export default function ProfilePanel({
               <div>
                 <span>Recommended starting target</span>
                 <strong>{estimatedCalories} kcal/day</strong>
+              </div>
+              <div className="calculator-meta">
+                <span>BMI</span>
+                <strong>{bmi || "--"}</strong>
               </div>
               <button className="target-button" type="button" onClick={onSyncCalculatedCalories}>
                 Use this target
@@ -462,8 +502,12 @@ export default function ProfilePanel({
           <div className="stat-row">
             <span>Estimated from</span>
             <strong>
-              {profile.age}y • {profile.heightCm}cm • {profile.weightKg}kg
+              {profile.age}y • {formattedHeight} • {formattedWeight}
             </strong>
+          </div>
+          <div className="stat-row">
+            <span>BMI</span>
+            <strong>{bmi || "--"}</strong>
           </div>
           <div className="stat-row">
             <span>Activity + goal</span>
