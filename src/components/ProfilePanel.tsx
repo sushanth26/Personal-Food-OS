@@ -546,9 +546,6 @@ export default function ProfilePanel({
             <strong>{profile.exclusions.length ? profile.exclusions.join(", ") : "none"}</strong>
           </div>
           <div className="action-stack">
-            <button className="ghost-button" type="button" onClick={onEditProfile}>
-              Edit preferences
-            </button>
             <button className="ghost-button" onClick={onBuildWeek} disabled={isGeneratingWeek}>
               {isGeneratingWeek ? "Generating weekly plan..." : "Build 7-day plan"}
             </button>

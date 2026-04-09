@@ -9,12 +9,12 @@ export const API_BASE_URL = (
 ).replace(/\/$/, "");
 
 export const tabs = [
-  { id: "profile", label: "Profile", accent: "amber" },
-  { id: "day", label: "Today", accent: "gold" },
   { id: "week", label: "Week", accent: "leaf" },
-  { id: "family", label: "Family", accent: "rose" },
+  { id: "day", label: "Today", accent: "gold" },
   { id: "reminders", label: "Soak", accent: "ink" },
-  { id: "groceries", label: "Shop", accent: "sand" }
+  { id: "groceries", label: "Shop", accent: "sand" },
+  { id: "family", label: "Family", accent: "rose" },
+  { id: "profile", label: "Profile", accent: "amber" }
 ] as const;
 
 export type TabId = (typeof tabs)[number]["id"];
