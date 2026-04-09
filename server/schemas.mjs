@@ -111,3 +111,38 @@ export const aiGroceryNormalizationJsonSchema = {
   },
   required: ["items"]
 };
+
+export const aiMealPlanReviewSchema = z.object({
+  meals: z.array(
+    z.object({
+      mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+      name: z.string(),
+      isBalanced: z.boolean(),
+      hasRealAccompaniment: z.boolean(),
+      notes: z.string()
+    })
+  )
+});
+
+export const aiMealPlanReviewJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    meals: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          mealType: { type: "string", enum: ["breakfast", "lunch", "dinner", "snack"] },
+          name: { type: "string" },
+          isBalanced: { type: "boolean" },
+          hasRealAccompaniment: { type: "boolean" },
+          notes: { type: "string" }
+        },
+        required: ["mealType", "name", "isBalanced", "hasRealAccompaniment", "notes"]
+      }
+    }
+  },
+  required: ["meals"]
+};

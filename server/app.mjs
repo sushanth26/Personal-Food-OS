@@ -3,8 +3,6 @@ import path from "node:path";
 import { findRecipeVideo } from "./video.mjs";
 import {
   generateDailyPlan,
-  generateFallbackDailyPlan,
-  generateFallbackWeeklyPlan,
   generateWeeklyPlan,
   normalizeGroceriesWithAI
 } from "./planner.mjs";
@@ -38,19 +36,14 @@ export function createApp(distDir) {
       }
 
       if (!client) {
-        return res.json({ plan: generateFallbackDailyPlan(profile, date), fallback: true });
+        return res.status(503).json({ error: "We cannot create a plan right now." });
       }
 
       const plan = await generateDailyPlan(profile, date);
       return res.json({ plan });
     } catch (error) {
       console.error("meal-plan error", error);
-      const { profile, date } = req.body ?? {};
-      if (!profile || !date) {
-        return res.status(400).json({ error: "Missing profile or date." });
-      }
-
-      return res.json({ plan: generateFallbackDailyPlan(profile, date), fallback: true });
+      return res.status(502).json({ error: "We cannot create a plan right now." });
     }
   });
 
@@ -62,19 +55,14 @@ export function createApp(distDir) {
       }
 
       if (!client) {
-        return res.json({ weekPlan: generateFallbackWeeklyPlan(profile, startDate), fallback: true });
+        return res.status(503).json({ error: "We cannot create a weekly plan right now." });
       }
 
       const weekPlan = await generateWeeklyPlan(profile, startDate);
       return res.json({ weekPlan });
     } catch (error) {
       console.error("weekly-meal-plan error", error);
-      const { profile, startDate } = req.body ?? {};
-      if (!profile || !startDate) {
-        return res.status(400).json({ error: "Missing profile or startDate." });
-      }
-
-      return res.json({ weekPlan: generateFallbackWeeklyPlan(profile, startDate), fallback: true });
+      return res.status(502).json({ error: "We cannot create a weekly plan right now." });
     }
   });
 
